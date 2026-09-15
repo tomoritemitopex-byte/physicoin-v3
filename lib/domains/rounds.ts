@@ -1,8 +1,19 @@
 import { createHash, randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { DomainError } from "./users";
-import { mineProof } from "@/lib/proof";
-import { verifyLocal, mineLocal } from "@/lib/proof-engine";
+import { mineLotteryBin } from "@/lib/proof";
+import {
+  verifyLocal,
+  mineLocal,
+  gridFromHex,
+  scoreGrid,
+  derive,
+  gridToHex,
+  gridHexToBytes,
+  ticketHex,
+  mineLottery,
+  PROOF_VERSION,
+} from "@/lib/proof-engine";
 import { buildChallenge, candidateChallenges } from "@/lib/proof-challenge";
 import { validateSession } from "./auth";
 
@@ -17,10 +28,16 @@ export const ROUND_SECS = 120;
 export const ROUND_REWARD = 1;
 export const ROUND_NONCES = 2000;
 export const MAX_ROUND_SUBMITS = 25;
+/** Website grind batch: small enough for a snappy click. */
+export const WEBSITE_GRIND_NONCES = 64;
+/** Moat rule (Step 6): the bar may never rise above this — eligibility
+ * must always cost real grinding (random 6x6 grids score ~60). */
+export function barCap(order: number): number {
+  return Math.max(8, Math.floor(maxScoreForOrder(order) / 6));
+}
 export const GENESIS_ORDER = 6;
 export const GENESIS_THRESHOLD = 10;
 export const MAX_ORDER = 12;
-export const CLOSE_EARLY_SCORE = 2;
 // Rounds count from this moment; changing it later starts a new chain.
 export const GENESIS_ISO = "2026-09-15T00:00:00Z";
 
@@ -61,28 +78,41 @@ export async function closeRound(n: number) {
   const rows = await sql<{ status: string }[]>`
     SELECT status FROM physi_rounds WHERE number = ${n} LIMIT 1`;
   if (!rows[0] || rows[0].status === "closed") return null;
-  const best = await sql<{ user_id: string; nonce: string; score: number }[]>`
-    SELECT user_id, nonce::text, score FROM physi_round_proofs
-    WHERE round_number = ${n} ORDER BY score ASC, submitted_at ASC LIMIT 1`;
+  // LOTTERY winner: lowest ticket_hex first (fixed-length hex sorts
+  // numerically), earliest submission breaks ties.
+  const best = await sql<{ user_id: string; nonce: string; score: number; ticket: string }[]>`
+    SELECT user_id, nonce::text, score, ticket_hex AS ticket FROM physi_round_proofs
+    WHERE round_number = ${n} AND ticket_hex IS NOT NULL
+    ORDER BY ticket_hex ASC, submitted_at ASC LIMIT 1`;
   const info = await sql<{ s: string; o: number; d: number }[]>`
     SELECT starts_at::text AS s, lattice_order AS o, difficulty AS d
     FROM physi_rounds WHERE number = ${n} LIMIT 1`;
   const order = info[0]?.o ?? GENESIS_ORDER;
-  const threshold = info[0]?.d ?? GENESIS_THRESHOLD;
+  const bar = Math.min(info[0]?.d ?? GENESIS_THRESHOLD, barCap(order));
   const durationSecs = Math.max(0, Math.round((Date.now() - Date.parse(info[0]?.s || new Date().toISOString())) / 1000));
-  // Retarget for the NEXT round (mirrors engine retarget()).
+  // Retarget for the NEXT round by VOLUME (lottery: luck has no skill
+  // curve, so participation — not scores — moves the bar).
+  const subs = await sql<{ c: number }[]>`
+    SELECT count(*)::int AS c FROM physi_round_proofs WHERE round_number = ${n}`;
   let nextOrder = order;
-  let nextThreshold = threshold;
-  if (best[0] && best[0].score === 0) {
-    nextOrder = Math.min(order + 1, MAX_ORDER);
+  let nextThreshold = bar;
+  if (subs[0].c > 40) {
+    nextThreshold = Math.max(bar - 1, 1);
+  } else if (subs[0].c === 0) {
+    nextThreshold = Math.min(bar + 1, barCap(order));
+  }
+  // Lattice escalation under lottery: a flawless (score 0) winner means
+  // the order fell — grow the grid (mirrors engine retarget()).
+  const winnerScore = best[0]?.score;
+  if (best[0] && winnerScore === 0 && order < MAX_ORDER) {
+    nextOrder = order + 1;
     nextThreshold = openingThreshold(nextOrder);
-  } else if (durationSecs > (ROUND_SECS * 6) / 5) {
-    nextThreshold = Math.min(threshold + 1, maxScoreForOrder(order));
-  } else if (durationSecs < (ROUND_SECS * 4) / 5) {
-    nextThreshold = Math.max(threshold - 1, 1);
   }
   if (!best[0]) {
-    await sql`UPDATE physi_rounds SET status = 'closed', closed_at = NOW() WHERE number = ${n}`;
+    const prevRound = await sql<{ t: string | null }[]>`
+      SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${n - 1} LIMIT 1`;
+    await sql`UPDATE physi_rounds SET status = 'closed', closed_at = NOW(),
+      prev_hash = ${prevRound[0]?.t || "GENESIS"} WHERE number = ${n}`;
     await ensureRound(n + 1, nextOrder, nextThreshold);
     return { round: n, winner: null as string | null, next: { order: nextOrder, threshold: nextThreshold } };
   }
@@ -101,10 +131,15 @@ export async function closeRound(n: number) {
   await sql`INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action)
     VALUES (${w.user_id}, ${prev}, ${sig}, 'round_win')`;
   await sql`UPDATE physi_users SET rep_ghost_sig = ${sig}, ghost_sig_updated_at = NOW() WHERE id = ${w.user_id}`;
+  // Chain it: this round's header commits to the previous winning ticket.
+  const prevRound = await sql<{ t: string | null }[]>`
+    SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${n - 1} LIMIT 1`;
+  const prevHash = prevRound[0]?.t || "GENESIS";
   await sql`UPDATE physi_rounds SET status = 'closed', winner_user_id = ${w.user_id},
-    winning_score = ${w.score}, winning_nonce = ${w.nonce}, closed_at = NOW() WHERE number = ${n}`;
+    winning_score = ${w.score}, winning_nonce = ${w.nonce}, winning_ticket = ${w.ticket},
+    prev_hash = ${prevHash}, closed_at = NOW() WHERE number = ${n}`;
   await ensureRound(n + 1, nextOrder, nextThreshold);
-  return { round: n, winner: w.user_id, score: w.score, next: { order: nextOrder, threshold: nextThreshold } };
+  return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, next: { order: nextOrder, threshold: nextThreshold } };
 }
 
 /** Close every finished round before doing anything else. */
@@ -137,10 +172,12 @@ export async function currentRound() {
   await ensureRound(n);
   const sql = getDb();
   const [r] = await sql`SELECT number, starts_at, ends_at, status, lattice_order, difficulty FROM physi_rounds WHERE number = ${n} LIMIT 1`;
-  const lead = await sql<{ user_id: string; score: number }[]>`
-    SELECT user_id, score FROM physi_round_proofs
-    WHERE round_number = ${n} ORDER BY score ASC, submitted_at ASC LIMIT 1`;
+  const lead = await sql<{ user_id: string; score: number; ticket: string }[]>`
+    SELECT user_id, score, ticket_hex AS ticket FROM physi_round_proofs
+    WHERE round_number = ${n} ORDER BY ticket_hex ASC NULLS LAST, submitted_at ASC LIMIT 1`;
   const endsIn = Math.max(0, Math.round((Date.parse(r.ends_at) - Date.now()) / 1000));
+  const prev = await sql<{ t: string | null }[]>`
+    SELECT winning_ticket AS t FROM physi_rounds WHERE number < ${n} AND winning_ticket IS NOT NULL ORDER BY number DESC LIMIT 1`;
   return {
     round: n,
     ends_in_secs: endsIn,
@@ -149,10 +186,12 @@ export async function currentRound() {
     status: r.status,
     lattice_order: r.lattice_order,
     difficulty: r.difficulty,
+    prev_hash: prev[0]?.t || "GENESIS",
+    version: PROOF_VERSION,
   };
 }
 
-/** Website miners: the server grinds ONE fresh proof for you and submits it.
+/** Website miners: grind a small batch, submit the best ticket.
  * Carries the clicker's session token like any external submit. */
 export async function grindAndSubmit(user_id: string, token: string) {
   const sql = getDb();
@@ -163,26 +202,31 @@ export async function grindAndSubmit(user_id: string, token: string) {
   await ensureRound(n);
   const [r] = await sql`SELECT lattice_order, difficulty FROM physi_rounds WHERE number = ${n} LIMIT 1`;
   const order = r.lattice_order;
-  const threshold = r.difficulty;
-  // Random salt per attempt: every grind is new work, never a reprint.
+  const bar = Math.min(r.difficulty, barCap(order));
   const salt = randomBytes(8).toString("hex");
   const challenge = buildChallenge({ round: n, userId: user_id, salt });
-  // Fast path: Rust binary when it runs here; pure-TS grind otherwise
-  // (e.g. serverless hosts where native binaries can't execute).
-  let proof: { nonce: number; score: number; grid_hex: string };
+  // Best-of-batch lottery ticket. Rust binary when it runs here,
+  // pure-TS grind otherwise (serverless hosts can't run binaries).
+  let best: { nonce: number; score: number; grid_hex: string; ticket_hex: string } | null = null;
   try {
-    proof = await mineProof(challenge, threshold, ROUND_NONCES, order);
+    const p = await mineLotteryBin(challenge, bar, WEBSITE_GRIND_NONCES, order);
+    best = p;
   } catch {
-    const local = mineLocal(challenge, threshold, ROUND_NONCES, order);
-    if (!local) throw new DomainError("PROOF_BUDGET_EXHAUSTED", "Nonce budget ran out.", 422);
-    proof = local;
+    best = await mineLottery(challenge, bar, WEBSITE_GRIND_NONCES, order);
   }
-  return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score, salt, token);
+  if (!best) throw new DomainError("PROOF_BUDGET_EXHAUSTED", "No eligible grid in batch.", 422);
+  return recordProof(
+    user_id, n, best.nonce, best.grid_hex, best.score, salt, token, best.ticket_hex, PROOF_VERSION
+  );
 }
 
-/** Separate machines: submit an externally mined proof (verified here).
+/** Separate machines: submit a lottery entry (verified here).
  * Ownership: the submitter must present the wallet's own live session
- * token — nobody may file proofs (or win rounds) as someone else. */
+ * token — nobody may file proofs (or win rounds) as someone else.
+ * v1 rules: eligibility (score <= bar) + climb moat (grid must derive
+ * from (challenge, nonce) at the fixed budget — Step 6) + ticket match.
+ * The server ALWAYS recomputes the ticket; a client-sent ticket that
+ * disagrees means a broken client, and is rejected. */
 export async function recordProof(
   user_id: string,
   round: number,
@@ -190,7 +234,9 @@ export async function recordProof(
   grid_hex: string,
   score: number,
   salt = "",
-  token = ""
+  token = "",
+  ticket_hex = "",
+  version = PROOF_VERSION
 ) {
   const sql = getDb();
   const u = await sql`SELECT id FROM physi_users WHERE id = ${user_id} LIMIT 1`;
@@ -212,38 +258,40 @@ export async function recordProof(
   if (round !== current) throw new DomainError("ROUND_CLOSED", "That round already closed.", 409);
   const [r] = await sql`SELECT lattice_order, difficulty FROM physi_rounds WHERE number = ${round} LIMIT 1`;
   const order = r?.lattice_order ?? GENESIS_ORDER;
-  const threshold = r?.difficulty ?? GENESIS_THRESHOLD;
+  const bar = Math.min(r?.difficulty ?? GENESIS_THRESHOLD, barCap(order));
   // Nibble form (2*N*N chars, current) or legacy byte-pair (4*N*N).
   if (grid_hex.length !== 2 * order * order && grid_hex.length !== 4 * order * order) {
     throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
   }
-  // Accept both challenge shapes (see proof-challenge.ts — single spec).
-  // Pure-TS verification: no binary needed, identical math.
-  let ok = false;
+  // v1 verify, both challenge shapes (see proof-challenge.ts — single spec):
+  // format + eligibility + climb moat + ticket recompute.
+  let ticket: string | null = null;
   for (const c of candidateChallenges({ round, userId: user_id, salt })) {
-    if (verifyLocal(c, threshold, nonce, grid_hex, order)) {
-      ok = true;
-      break;
-    }
+    const g = gridFromHex(grid_hex.toLowerCase(), order);
+    if (!g) break;
+    if (scoreGrid(g) > bar) break;
+    const derived = derive(c, nonce, order);
+    if (gridToHex(derived) !== grid_hex.toLowerCase()) continue;
+    ticket = await ticketHex(c, nonce, g);
+    break;
   }
-  if (!ok) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
-  if (score > threshold) {
-    throw new DomainError("TOO_WEAK", `Score ${score} misses the round bar (${threshold}).`, 422);
+  if (!ticket) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
+  if (score > bar) {
+    throw new DomainError("TOO_WEAK", `Score ${score} misses the round bar (${bar}).`, 422);
   }
-  const gridBytes = Buffer.from(grid_hex, "hex");
+  if (ticket_hex && ticket_hex.toLowerCase() !== ticket) {
+    throw new DomainError("BAD_PROOF", "Ticket does not match recomputation.", 422);
+  }
+  const gridBytes = Buffer.from(gridFromHex(grid_hex.toLowerCase(), order) ? grid_hex.padEnd(grid_hex.length + (grid_hex.length % 2), "0") : "", "hex");
   try {
     await sql`
-      INSERT INTO physi_round_proofs (round_number, user_id, nonce, score, grid, salt)
-      VALUES (${round}, ${user_id}, ${nonce}, ${score}, ${gridBytes}, ${salt})`;
+      INSERT INTO physi_round_proofs (round_number, user_id, nonce, score, grid, salt, ticket_hex, version)
+      VALUES (${round}, ${user_id}, ${nonce}, ${score}, ${gridBytes}, ${salt}, ${ticket}, ${version})`;
   } catch (e) {
     if (String((e as Error)?.message || "").includes("duplicate")) {
       throw new DomainError("DUPLICATE_PROOF", "That proof is already in.", 409);
     }
     throw e;
-  }
-  // Near-flawless proof ends the round on the spot — speed escalates.
-  if (score <= CLOSE_EARLY_SCORE) {
-    await closeRound(round);
   }
   return currentRound();
 }
@@ -251,7 +299,7 @@ export async function recordProof(
 export async function roundWins(user_id: string, limit = 20) {
   const sql = getDb();
   return await sql`
-    SELECT number AS round, winning_score AS score, reward, closed_at FROM physi_rounds
+    SELECT number AS round, winning_score AS score, winning_ticket AS ticket, reward, closed_at FROM physi_rounds
     WHERE winner_user_id = ${user_id} ORDER BY number DESC LIMIT ${Math.min(limit, 50)}`;
 }
 

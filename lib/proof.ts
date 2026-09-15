@@ -86,3 +86,37 @@ export async function verifyProof(
     return false;
   }
 }
+
+export type LotteryProof = MinedProof & { ticket_hex: string; version: number };
+
+/// Lottery grind via the Rust binary: best ticket under the bar.
+/// Throws PROOF_BUDGET_EXHAUSTED when nothing qualifies.
+export async function mineLotteryBin(
+  challenge: string,
+  bar: number,
+  maxNonces: number,
+  order = 6,
+  timeoutMs = 120_000
+): Promise<LotteryProof> {
+  if (!challenge || maxNonces <= 0) {
+    throw new ProofError("PROOF_BAD_INPUT", "challenge and maxNonces are required");
+  }
+  const bin = binPath();
+  try {
+    const { stdout } = await run(
+      bin,
+      ["mine-lottery", challenge, String(bar), String(maxNonces), String(order)],
+      { timeout: timeoutMs }
+    );
+    const p = JSON.parse(stdout.trim()) as LotteryProof;
+    if (typeof p.nonce !== "number" || typeof p.ticket_hex !== "string") {
+      throw new ProofError("PROOF_FAILED", "engine returned a malformed lottery proof");
+    }
+    return p;
+  } catch (e) {
+    if (e instanceof ProofError) throw e;
+    const msg = String((e as Error)?.message || e);
+    if (/BUDGET_EXHAUSTED/.test(msg)) throw new ProofError("PROOF_BUDGET_EXHAUSTED", "no eligible grid in batch");
+    throw new ProofError("PROOF_FAILED", `engine lottery failed: ${msg.slice(0, 200)}`);
+  }
+}

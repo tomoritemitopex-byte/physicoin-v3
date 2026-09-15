@@ -21,14 +21,18 @@
 ## The loop (run forever, every few seconds)
 1. **Read the round fresh** — `GET /api/mining?round=current`.
    Rounds last ~2 minutes. A stale round number is rejected, no exceptions.
-2. **Grind ONE proof:**
-   `./physi-proof mine "<round>:<wallet>:<salt>" <difficulty> 2000 [lattice_order]`
+2. **Grind ONE proof (v1 lottery):**
+   `./physi-proof mine-lottery "<round>:<wallet>:<salt>" <bar> <nonces> [order]`
+   - Any grid at/under the bar qualifies; the LOWEST ticket wins the round.
    - `<salt>`: fresh random string EVERY attempt. Reused salt = rejection.
    - Challenge also accepts a `v3-round:` prefix — either shape verifies.
    - Grid output: nibble form (72 chars for 6×6). Older binaries emit
      byte-pair form (144 chars) — the server reads both.
+   - The server recomputes score AND ticket from your nonce+grid. Claimed
+     values are cross-checked, never trusted. Hand-made grids fail: every
+     grid must derive from its (challenge, nonce) through the fixed climb.
 3. **Submit:** `POST <server>/api/mining`
-   `{user_id, round, nonce, grid_hex, score, salt, token}`
+   `{user_id, round, nonce, grid_hex, score, salt, ticket_hex, version: 1, token}`
    - `token`: your wallet's session — `POST <server>/api/auth/session`
      `{user_id}` → `{token}`. Submits without the wallet's own live token
      are refused (`NO_TOKEN`); a token for a different wallet is refused

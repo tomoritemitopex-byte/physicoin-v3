@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { argon2id } from "hash-wasm";
 
 // Pure-TypeScript twin of the Rust proof engine (proof/src/lib.rs).
 // Bit-for-bit compatible by construction: same SHA-256, same SplitMix64,
@@ -85,6 +86,10 @@ export function scoreGrid(g: Grid): number {
 }
 
 export const CLIMB_ITERS = 1500;
+export const PROOF_VERSION = 1;
+/** Argon2id cost (practice grade — must match Rust TICKET_* consts). */
+export const TICKET_MEM_KIB = 8192;
+export const TICKET_PASSES = 1;
 
 export function derive(challenge: string, nonce: number, n: number): Grid {
   const enc = new TextEncoder().encode(challenge);
@@ -120,8 +125,7 @@ export function derive(challenge: string, nonce: number, n: number): Grid {
   return g;
 }
 
-export function gridToHex(g: Grid): string {
-  let s = "";
+export function gridToHex(g: Grid): string {  let s = "";
   for (let i = 0; i < g.n; i++) for (let j = 0; j < g.n; j++) s += g.rank[i][j].toString(16);
   for (let i = 0; i < g.n; i++) for (let j = 0; j < g.n; j++) s += g.reg[i][j].toString(16);
   return s;
@@ -178,5 +182,95 @@ export function mineLocal(
     if (s <= maxScore) return { nonce, score: s, grid_hex: gridToHex(g) };
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Lottery (v1): eligibility + lowest ticket wins. Ticket = Argon2id over
+// challenge || nonce || grid — identical to Rust ticket().
+// ---------------------------------------------------------------------------
+
+function ticketSalt(challenge: string): Uint8Array {
+  const h = createHash("sha256").update("PHYSI-LOTTERY-V1" + challenge).digest();
+  return new Uint8Array(h.subarray(0, 16));
+}
+
+function gridBytes(g: Grid): Uint8Array {
+  const out = new Uint8Array(2 * g.n * g.n);
+  let k = 0;
+  for (let i = 0; i < g.n; i++) for (let j = 0; j < g.n; j++) out[k++] = g.rank[i][j];
+  for (let i = 0; i < g.n; i++) for (let j = 0; j < g.n; j++) out[k++] = g.reg[i][j];
+  return out;
+}
+
+export async function ticketHex(challenge: string, nonce: number, g: Grid): Promise<string> {
+  const nb = new Uint8Array(8);
+  new DataView(nb.buffer).setBigUint64(0, BigInt(nonce), true);
+  const gb = gridBytes(g);
+  const pw = new Uint8Array(challenge.length + 8 + gb.length);
+  pw.set(new TextEncoder().encode(challenge), 0);
+  pw.set(nb, challenge.length);
+  pw.set(gb, challenge.length + 8);
+  return argon2id({
+    password: pw,
+    salt: ticketSalt(challenge),
+    parallelism: 1,
+    iterations: TICKET_PASSES,
+    memorySize: TICKET_MEM_KIB,
+    hashLength: 32,
+    outputType: "hex",
+  });
+}
+
+/** Grid hex (nibble or legacy byte-pair) → raw cell bytes. */
+export function gridHexToBytes(hex: string, n: number): Uint8Array {
+  const h = hex.toLowerCase();
+  if (h.length === 2 * n * n) {
+    const out = new Uint8Array(2 * n * n);
+    for (let i = 0; i < h.length; i++) out[i] = parseInt(h[i], 16);
+    return out;
+  }
+  const out = new Uint8Array(h.length / 2);
+  for (let i = 0; i < h.length; i += 2) out[i / 2] = parseInt(h.slice(i, i + 2), 16);
+  return out;
+}
+
+/** Full v1 verify: format, eligibility, ticket match, AND climb moat —
+ * the grid must be exactly what (challenge, nonce) derives to at the
+ * fixed budget. Hand-crafted grids never pass, however good they score. */
+export async function verifyLottery(input: {
+  challenge: string;
+  bar: number;
+  nonce: number;
+  gridHex: string;
+  order: number;
+  ticketHex: string;
+}): Promise<boolean> {
+  const g = gridFromHex(input.gridHex.toLowerCase(), input.order);
+  if (!g) return false;
+  if (scoreGrid(g) > input.bar) return false;
+  const derived = derive(input.challenge, input.nonce, input.order);
+  if (gridToHex(derived) !== input.gridHex.toLowerCase()) return false;
+  const t = await ticketHex(input.challenge, input.nonce, g);
+  return t === input.ticketHex.toLowerCase();
+}
+
+/** v1 grind: sample candidates, keep the eligible one with lowest ticket. */
+export async function mineLottery(
+  challenge: string,
+  bar: number,
+  maxNonces: number,
+  order: number
+): Promise<{ nonce: number; score: number; grid_hex: string; ticket_hex: string } | null> {
+  let best: { nonce: number; score: number; grid_hex: string; ticket_hex: string } | null = null;
+  for (let nonce = 0; nonce < maxNonces; nonce++) {
+    const g = derive(challenge, nonce, order);
+    const s = scoreGrid(g);
+    if (s > bar) continue;
+    const t = await ticketHex(challenge, nonce, g);
+    if (!best || t < best.ticket_hex) {
+      best = { nonce, score: s, grid_hex: gridToHex(g), ticket_hex: t };
+    }
+  }
+  return best;
 }
 void MASK32;

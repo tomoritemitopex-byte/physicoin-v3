@@ -73,7 +73,7 @@ export default function MiningPage() {
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
       <h1 className="text-xl font-black">Mining</h1>
       <p className="mt-1 text-sm text-ink/70">
-        One winner per round. Lowest grid score takes the coin — and fast rounds raise the bar.
+        Lottery rounds: any grid under the bar qualifies, lowest ticket wins the coin.
       </p>
       {round && (
         <div className="mt-3 rounded-2xl border border-sky/30 bg-white p-4 font-mono text-xs">

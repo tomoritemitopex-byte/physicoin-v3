@@ -11,6 +11,11 @@
 pub const CLIMB_ITERS: usize = 1500;
 /// Highest lattice order this engine implements.
 pub const MAX_ORDER: u8 = 12;
+/// Proof encoding version. v1 = nibble grid + lottery ticket.
+pub const PROOF_VERSION: u8 = 1;
+/// Argon2id cost: 8 MiB, 1 pass, 1 lane, 32-byte ticket (practice grade).
+pub const TICKET_MEM_KIB: u32 = 8192;
+pub const TICKET_PASSES: u32 = 1;
 
 /// An NxN grid: each cell holds a rank and a regiment (both < N).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -335,6 +340,65 @@ pub fn retarget(prev: Difficulty, target_secs: u64, samples: &[BlockSample]) -> 
 }
 
 pub mod quantum;
+
+// ---------------------------------------------------------------------------
+// Lottery: eligibility (score <= bar) separates from winning (lowest
+// ticket). Ticket = Argon2id over challenge || nonce || grid — memory-hard,
+// so raw speed and future quantum search buy little; any CPU competes.
+// ---------------------------------------------------------------------------
+
+use argon2::{Algorithm, Argon2, Params, Version};
+
+/// Lottery ticket for a candidate: 32 bytes, lower wins.
+pub fn ticket<const N: usize>(challenge: &[u8], nonce: u64, grid: &Grid<N>) -> [u8; 32] {
+    let mut pw = Vec::with_capacity(challenge.len() + 8 + 2 * N * N);
+    pw.extend_from_slice(challenge);
+    pw.extend_from_slice(&nonce.to_le_bytes());
+    pw.extend_from_slice(&grid.to_bytes());
+    // Salt is fixed per challenge (verifier recomputes it identically).
+    let mut salt_input = Vec::with_capacity(16 + challenge.len());
+    salt_input.extend_from_slice(b"PHYSI-LOTTERY-V1");
+    salt_input.extend_from_slice(challenge);
+    let digest = sha256(&salt_input);
+    let mut salt = [0u8; 16];
+    salt.copy_from_slice(&digest[..16]);
+    let params = Params::new(TICKET_MEM_KIB, TICKET_PASSES, 1, Some(32))
+        .expect("valid ticket params");
+    let ctx = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut out = [0u8; 32];
+    ctx.hash_password_into(&pw, &salt, &mut out).expect("ticket hash");
+    out
+}
+
+pub fn ticket_hex<const N: usize>(challenge: &[u8], nonce: u64, grid: &Grid<N>) -> String {
+    ticket(challenge, nonce, grid).iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Lottery grind: sample up to max_nonces candidates, keep the eligible
+/// one (score <= bar) with the LOWEST ticket. Returns None if none qualify.
+pub fn mine_lottery<const N: usize>(
+    challenge: &[u8],
+    bar: u32,
+    max_nonces: u64,
+) -> Option<(Proof<N>, [u8; 32])> {
+    let mut best: Option<(Proof<N>, [u8; 32])> = None;
+    for nonce in 0..max_nonces {
+        let grid = derive::<N>(challenge, nonce);
+        let s = score(&grid);
+        if s > bar {
+            continue;
+        }
+        let t = ticket(challenge, nonce, &grid);
+        let better = match &best {
+            None => true,
+            Some((_, bt)) => t < *bt,
+        };
+        if better {
+            best = Some((Proof::<N> { nonce, grid, score: s }, t));
+        }
+    }
+    best
+}
 
 /// Dual-execution submit: probe the quantum hook first (order 6 only),
 /// fall back to the classical parallel grind.

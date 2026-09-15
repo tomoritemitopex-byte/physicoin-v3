@@ -1,8 +1,9 @@
 //! physi-proof CLI: the bridge between the website (Node) and the engine.
-//!   physi-proof mine   <challenge> <max_score> <max_nonces> [order]
-//!   physi-proof verify <challenge> <max_score> <nonce> <grid_hex> [order]
+//!   physi-proof mine         <challenge> <max_score> <max_nonces> [order]
+//!   physi-proof mine-lottery <challenge> <bar> <max_nonces> [order]
+//!   physi-proof verify       <challenge> <max_score> <nonce> <grid_hex> [order]
 //! Exit 0 on success/OK, 2 on FAIL-or-error. Never prints a fake proof.
-use physi_proof::{mine_parallel, verify, Grid, MAX_ORDER};
+use physi_proof::{mine_parallel, mine_lottery, verify, Grid, MAX_ORDER};
 
 /// Grid transport: ONE hex char per cell (values are always < 16).
 /// A 6x6 grid is 72 chars; order N is 2*N*N chars.
@@ -30,8 +31,9 @@ fn parse_order(s: Option<&String>) -> u8 {
 
 fn usage() -> ! {
     eprintln!("usage:");
-    eprintln!("  physi-proof mine   <challenge> <max_score> <max_nonces> [order]");
-    eprintln!("  physi-proof verify <challenge> <max_score> <nonce> <grid_hex> [order]");
+    eprintln!("  physi-proof mine         <challenge> <max_score> <max_nonces> [order]");
+    eprintln!("  physi-proof mine-lottery <challenge> <bar> <max_nonces> [order]");
+    eprintln!("  physi-proof verify       <challenge> <max_score> <nonce> <grid_hex> [order]");
     std::process::exit(2);
 }
 
@@ -94,6 +96,25 @@ fn run_verify<const N: usize>(challenge: &[u8], max_score: u32, nonce: u64, grid
     }
 }
 
+fn run_mine_lottery<const N: usize>(challenge: &[u8], bar: u32, max_nonces: u64) {
+    match mine_lottery::<N>(challenge, bar, max_nonces) {
+        Some((p, t)) => {
+            let th: String = t.iter().map(|b| format!("{:02x}", b)).collect();
+            println!(
+                "{{\"nonce\":{},\"score\":{},\"grid_hex\":\"{}\",\"ticket_hex\":\"{}\",\"version\":1}}",
+                p.nonce,
+                p.score,
+                hex_encode_cells(&p.grid.to_bytes()),
+                th
+            );
+        }
+        None => {
+            eprintln!("BUDGET_EXHAUSTED");
+            std::process::exit(2);
+        }
+    }
+}
+
 macro_rules! dispatch {
     ($order:expr, $f:ident, $($arg:expr),*) => {
         match $order {
@@ -126,6 +147,16 @@ fn main() {
             let max_nonces: u64 = args[4].parse().unwrap_or_else(|_| usage());
             let order = parse_order(args.get(5));
             dispatch!(order, run_mine, challenge, max_score, max_nonces);
+        }
+        "mine-lottery" => {
+            if args.len() != 5 && args.len() != 6 {
+                usage();
+            }
+            let challenge = args[2].as_bytes();
+            let bar: u32 = args[3].parse().unwrap_or_else(|_| usage());
+            let max_nonces: u64 = args[4].parse().unwrap_or_else(|_| usage());
+            let order = parse_order(args.get(5));
+            dispatch!(order, run_mine_lottery, challenge, bar, max_nonces);
         }
         "verify" => {
             if args.len() != 6 && args.len() != 7 {
