@@ -23,9 +23,12 @@ export class ProofError extends Error {
 function binPath(): string {
   if (process.env.PROOF_BIN && existsSync(process.env.PROOF_BIN)) return process.env.PROOF_BIN;
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const local = resolve(root, "proof/target/release/physi-proof");
-  if (existsSync(local)) return local;
-  throw new ProofError("PROOF_BINARY_MISSING", `proof engine binary not found at ${local}`);
+  // engine/physi-proof ships with the app (tracked in git, deployed).
+  // proof/target/release/physi-proof is the local dev build.
+  for (const p of [resolve(root, "engine/physi-proof"), resolve(root, "proof/target/release/physi-proof")]) {
+    if (existsSync(p)) return p;
+  }
+  throw new ProofError("PROOF_BINARY_MISSING", "proof engine binary not found (engine/physi-proof)");
 }
 
 /// Mine a proof: grind until a grid scores at or under maxScore.
