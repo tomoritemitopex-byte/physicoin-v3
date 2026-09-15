@@ -188,8 +188,19 @@ export async function recordProof(
   if (grid_hex.length !== expectLen) {
     throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
   }
-  const challenge = salt ? `v3-round:${round}:${user_id}:${salt}` : `v3-round:${round}:${user_id}`;
-  const ok = await verifyProof(challenge, threshold, nonce, grid_hex, order).catch(() => false);
+  // Accept both challenge shapes: prefixed (v3-round:…) and bare
+  // (round:…). Docs once showed the bare form — never punish miners
+  // for following instructions.
+  const salted = salt ? `:${salt}` : "";
+  const candidates = [
+    `v3-round:${round}:${user_id}${salted}`,
+    `${round}:${user_id}${salted}`,
+  ];
+  let ok = false;
+  for (const c of candidates) {
+    ok = await verifyProof(c, threshold, nonce, grid_hex, order).catch(() => false);
+    if (ok) break;
+  }
   if (!ok) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
   if (score > threshold) {
     throw new DomainError("TOO_WEAK", `Score ${score} misses the round bar (${threshold}).`, 422);
