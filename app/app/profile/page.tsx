@@ -11,6 +11,7 @@ type Profile = {
 
 export default function ProfilePage() {
   const [me, setMe] = useState<Profile | null>(null);
+  const [genesis, setGenesis] = useState(false);
   const [form, setForm] = useState({ full_name: "", nickname: "", programme: "PHYS", level: "100L" });
   const [msg, setMsg] = useState("");
 
@@ -20,6 +21,7 @@ export default function ProfilePage() {
       const j = await r.json();
       if (j.ok) {
         setMe(j.user);
+        setGenesis(j.rank === 1);
         localStorage.setItem("physi_profile", JSON.stringify(j.user));
       }
     } catch {}
@@ -155,6 +157,11 @@ export default function ProfilePage() {
         <div className="mt-4 space-y-3">
           <div className="rounded-2xl border border-sky/30 bg-white p-4">
             <p className="text-lg font-black">@{me.nickname}</p>
+            {genesis && (
+              <p className="mt-1 inline-block rounded-full bg-accent px-2 py-0.5 font-mono text-[10px] font-bold text-white">
+                ★ Genesis wallet — first on the chain
+              </p>
+            )}
             <p className="font-mono text-xs text-ink/60">
               {me.programme} · {me.level}
             </p>

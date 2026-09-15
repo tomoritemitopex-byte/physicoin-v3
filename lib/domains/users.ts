@@ -81,3 +81,12 @@ export async function getUserByNickname(nickname: string): Promise<User | null> 
     FROM physi_users WHERE lower(nickname) = ${String(nickname).toLowerCase()} LIMIT 1`;
   return rows[0] || null;
 }
+
+/** Join order: 1 = first wallet ever on this chain. */
+export async function walletRank(id: string): Promise<{ rank: number; total: number }> {
+  const sql = getDb();
+  const rows = await sql<{ rank: string; total: string }[]>`
+    SELECT (SELECT count(*)::text FROM physi_users WHERE created_at <= (SELECT created_at FROM physi_users WHERE id = ${id})) AS rank,
+      (SELECT count(*)::text FROM physi_users) AS total`;
+  return { rank: Number(rows[0]?.rank || 0), total: Number(rows[0]?.total || 0) };
+}
