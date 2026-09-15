@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { DomainError } from "./users";
 import { mineProof } from "@/lib/proof";
@@ -13,8 +14,8 @@ export async function checkIn(user_id: string): Promise<{
   proof: { nonce: number; score: number };
 }> {
   const sql = getDb();
-  const users = await sql<{ id: string; authority_final: string; mining_balance: string }[]>`
-    SELECT id, authority_final::text, mining_balance::text FROM physi_users WHERE id = ${user_id} LIMIT 1`;
+  const users = await sql<{ id: string; authority_final: string; mining_balance: string; rep_ghost_sig: string | null }[]>`
+    SELECT id, authority_final::text, mining_balance::text, rep_ghost_sig FROM physi_users WHERE id = ${user_id} LIMIT 1`;
   if (!users[0]) throw new DomainError("UNKNOWN_USER", "User not found.", 404);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -37,6 +38,14 @@ export async function checkIn(user_id: string): Promise<{
     VALUES (${user_id}, ${MINING_BASE}, ${Number(users[0].authority_final || 1)}, ${earned},
       ${proof.nonce}, ${proof.score}, ${gridBytes})`;
   await sql`UPDATE physi_users SET mining_balance = ${balance}, updated_at = NOW() WHERE id = ${user_id}`;
+
+  // Ghost chain: link this claim to the user's previous signature.
+  const prev = users[0].rep_ghost_sig || "GENESIS";
+  const sig = createHash("sha256").update(`${prev}:${user_id}:${today}:${proof.nonce}`).digest("hex");
+  await sql`
+    INSERT INTO physi_ghost_chain (user_id, prev_sig, new_sig, action)
+    VALUES (${user_id}, ${prev}, ${sig}, 'mining_claim')`;
+  await sql`UPDATE physi_users SET rep_ghost_sig = ${sig}, ghost_sig_updated_at = NOW() WHERE id = ${user_id}`;
 
   return { earned, balance: String(balance), proof: { nonce: proof.nonce, score: proof.score } };
 }
