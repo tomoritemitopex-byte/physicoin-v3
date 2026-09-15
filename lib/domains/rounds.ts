@@ -313,15 +313,24 @@ export async function recentRounds(limit = 20) {  const sql = getDb();
   return rows;
 }
 
-export async function leaderboard(limit = 20) {
+export async function leaderboard(limit = 20, includeTest = false) {
   const sql = getDb();
-  return await sql<
-    { nickname: string; wins: number; earned: string; best_score: number | null }[]
-  >`
+  // Lab vs game: test wallets (test_*) never top a public board.
+  // They race and earn like anyone else; they just don't rank.
+  const n = Math.min(limit, 50);
+  if (includeTest) {
+    return await sql`
+      SELECT u.nickname, count(*)::int AS wins,
+        SUM(r.reward)::text AS earned, MIN(r.winning_score)::int AS best_score
+      FROM physi_rounds r JOIN physi_users u ON u.id = r.winner_user_id
+      WHERE r.status = 'closed' AND r.winner_user_id IS NOT NULL
+      GROUP BY u.nickname ORDER BY wins DESC, earned DESC LIMIT ${n}`;
+  }
+  return await sql`
     SELECT u.nickname, count(*)::int AS wins,
       SUM(r.reward)::text AS earned, MIN(r.winning_score)::int AS best_score
     FROM physi_rounds r JOIN physi_users u ON u.id = r.winner_user_id
     WHERE r.status = 'closed' AND r.winner_user_id IS NOT NULL
-    GROUP BY u.nickname ORDER BY wins DESC, earned DESC
-    LIMIT ${Math.min(limit, 50)}`;
+      AND u.nickname NOT LIKE 'test\\_%' ESCAPE '\\'
+    GROUP BY u.nickname ORDER BY wins DESC, earned DESC LIMIT ${n}`;
 }
