@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "user_id is required." }, { status: 400 });
     }
     if (body.nonce !== undefined && body.grid_hex && body.score !== undefined) {
-      const res = await recordProof(body.user_id, body.round, body.nonce, body.grid_hex, body.score);
+      const res = await recordProof(body.user_id, body.round, body.nonce, body.grid_hex, body.score, body.salt || "");
       return NextResponse.json({ ok: true, recorded: true, ...res }, { status: 201 });
     }
     const res = await grindAndSubmit(body.user_id);
