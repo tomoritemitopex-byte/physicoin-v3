@@ -1,5 +1,9 @@
 # Running a PhysiCoin v3 miner (another node)
 
+## Server (in the repo too — see `lib/config.ts`)
+- Production: **https://physicoin-v3.vercel.app**
+- Rounds: `GET <server>/api/mining?round=current`
+
 ## What you need
 1. The miner program — download `physi-proof` from the repo's **Releases** page
    (Linux ready to run) or build it: `cargo build --release -p physi-proof`

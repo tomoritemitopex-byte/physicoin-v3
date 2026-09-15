@@ -184,7 +184,17 @@ export default function ProfilePage() {
               </button>
             </div>
             {sendMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{sendMsg}</p>}
-            <a href="/app/roadmap" className="mt-2 inline-block text-sm font-bold text-accent">
+            <button
+              onClick={() => {
+                const link = `${window.location.origin}/join?ref=${me.id}`;
+                navigator.clipboard?.writeText(link).catch(() => {});
+                setSendMsg("Invite link copied — anyone opening it can mine.");
+              }}
+              className="mt-2 text-sm font-bold text-accent"
+            >
+              Copy my invite link
+            </button>
+            <a href="/app/roadmap" className="mt-2 block text-sm font-bold text-accent">
               Vote on the Road →
             </a>
           </div>
