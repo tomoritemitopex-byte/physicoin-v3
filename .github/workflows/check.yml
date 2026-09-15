@@ -1,0 +1,33 @@
+name: v3 checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  proof-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: engine tests
+        run: cargo test --release --manifest-path proof/Cargo.toml
+      - name: rebuild release binary
+        run: cargo build --release --manifest-path proof/Cargo.toml
+      - name: TS/Rust parity
+        run: node scripts/proof-parity.mjs
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      # No DATABASE_URL here on purpose: migrate must skip gracefully,
+      # and the build must pass with empty feeds (degraded, never red).
+      - run: npm run build

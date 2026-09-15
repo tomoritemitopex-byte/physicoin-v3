@@ -22,15 +22,20 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const h = req.headers.get("authorization") || "";
     const body = await req.json();
     if (!body.user_id) {
       return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "user_id is required." }, { status: 400 });
     }
+    const token = body.token || (h.startsWith("Bearer ") ? h.slice(7) : "");
+    if (!token) {
+      return NextResponse.json({ ok: false, code: "NO_TOKEN", message: "Wallet session required — fetch one from /api/auth/session first." }, { status: 401 });
+    }
     if (body.nonce !== undefined && body.grid_hex && body.score !== undefined) {
-      const res = await recordProof(body.user_id, body.round, body.nonce, body.grid_hex, body.score, body.salt || "");
+      const res = await recordProof(body.user_id, body.round, body.nonce, body.grid_hex, body.score, body.salt || "", token);
       return NextResponse.json({ ok: true, recorded: true, ...res }, { status: 201 });
     }
-    const res = await grindAndSubmit(body.user_id);
+    const res = await grindAndSubmit(body.user_id, token);
     return NextResponse.json({ ok: true, submitted: true, ...res }, { status: 201 });
   } catch (e) {
     return toErrorResponse(e);

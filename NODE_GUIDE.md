@@ -28,7 +28,15 @@
    - Grid output: nibble form (72 chars for 6×6). Older binaries emit
      byte-pair form (144 chars) — the server reads both.
 3. **Submit:** `POST <server>/api/mining`
-   `{user_id, round, nonce, grid_hex, score, salt}`
+   `{user_id, round, nonce, grid_hex, score, salt, token}`
+   - `token`: your wallet's session — `POST <server>/api/auth/session`
+     `{user_id}` → `{token}`. Submits without the wallet's own live token
+     are refused (`NO_TOKEN`); a token for a different wallet is refused
+     (`NOT_YOUR_WALLET`). Nobody files proofs as someone else.
+   - Challenge spec (`lib/proof-challenge.ts` is the single source of
+     truth — replicate exactly):
+     prefixed `` v3-round:<round>:<user_id>:<salt> `` or bare
+     `` <round>:<user_id>:<salt> ``. Salt fresh random per attempt.
 
 ## Reply codes — read them, don't ignore them
 | Reply | Meaning | Fix |

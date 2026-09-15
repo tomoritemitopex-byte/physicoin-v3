@@ -37,9 +37,19 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
       }
       localStorage.setItem("physi_profile", JSON.stringify(c.user));
       setMsg("Entering you in the current mining round…");
-      const m = await fetch("/api/mining", {
+      const sess = await fetch("/api/auth/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: c.user.id }),
+      }).then((r) => r.json());
+      if (!sess.ok) {
+        setMsg("Wallet created, but the round entry failed. Open Mining and tap once.");
+        setBusy(false);
+        return;
+      }
+      const m = await fetch("/api/mining", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sess.token}` },
         body: JSON.stringify({ user_id: c.user.id }),
       }).then((r) => r.json());
       if (m.ok) {

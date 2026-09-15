@@ -3,6 +3,8 @@ import { getDb } from "@/lib/db";
 import { DomainError } from "./users";
 import { mineProof } from "@/lib/proof";
 import { verifyLocal, mineLocal } from "@/lib/proof-engine";
+import { buildChallenge, candidateChallenges } from "@/lib/proof-challenge";
+import { validateSession } from "./auth";
 
 // Round mining: everyone grinds nonstop, ONE winner per round.
 // Lowest score wins the round; ties go to the earliest submission.
@@ -14,6 +16,7 @@ import { verifyLocal, mineLocal } from "@/lib/proof-engine";
 export const ROUND_SECS = 120;
 export const ROUND_REWARD = 1;
 export const ROUND_NONCES = 2000;
+export const MAX_ROUND_SUBMITS = 25;
 export const GENESIS_ORDER = 6;
 export const GENESIS_THRESHOLD = 10;
 export const MAX_ORDER = 12;
@@ -149,8 +152,9 @@ export async function currentRound() {
   };
 }
 
-/** Website miners: the server grinds ONE fresh proof for you and submits it. */
-export async function grindAndSubmit(user_id: string) {
+/** Website miners: the server grinds ONE fresh proof for you and submits it.
+ * Carries the clicker's session token like any external submit. */
+export async function grindAndSubmit(user_id: string, token: string) {
   const sql = getDb();
   const u = await sql`SELECT id FROM physi_users WHERE id = ${user_id} LIMIT 1`;
   if (!u[0]) throw new DomainError("UNKNOWN_USER", "User not found.", 404);
@@ -162,7 +166,7 @@ export async function grindAndSubmit(user_id: string) {
   const threshold = r.difficulty;
   // Random salt per attempt: every grind is new work, never a reprint.
   const salt = randomBytes(8).toString("hex");
-  const challenge = `v3-round:${n}:${user_id}:${salt}`;
+  const challenge = buildChallenge({ round: n, userId: user_id, salt });
   // Fast path: Rust binary when it runs here; pure-TS grind otherwise
   // (e.g. serverless hosts where native binaries can't execute).
   let proof: { nonce: number; score: number; grid_hex: string };
@@ -173,21 +177,36 @@ export async function grindAndSubmit(user_id: string) {
     if (!local) throw new DomainError("PROOF_BUDGET_EXHAUSTED", "Nonce budget ran out.", 422);
     proof = local;
   }
-  return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score, salt);
+  return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score, salt, token);
 }
 
-/** Separate machines: submit an externally mined proof (verified here). */
+/** Separate machines: submit an externally mined proof (verified here).
+ * Ownership: the submitter must present the wallet's own live session
+ * token — nobody may file proofs (or win rounds) as someone else. */
 export async function recordProof(
   user_id: string,
   round: number,
   nonce: number,
   grid_hex: string,
   score: number,
-  salt = ""
+  salt = "",
+  token = ""
 ) {
   const sql = getDb();
   const u = await sql`SELECT id FROM physi_users WHERE id = ${user_id} LIMIT 1`;
   if (!u[0]) throw new DomainError("UNKNOWN_USER", "User not found.", 404);
+  const { user_id: owner } = await validateSession(token);
+  if (owner !== user_id) {
+    throw new DomainError("NOT_YOUR_WALLET", "This session cannot mine for that wallet.", 403);
+  }
+  // Anti-spam: each wallet gets limited shots per round. Grind volume
+  // still matters, but every submit must count — flooding is pointless.
+  const used = await sql<{ c: number }[]>`
+    SELECT count(*)::int AS c FROM physi_round_proofs
+    WHERE round_number = ${round} AND user_id = ${user_id}`;
+  if (used[0].c >= MAX_ROUND_SUBMITS) {
+    throw new DomainError("RATE_LIMITED", `Too many submits this round (${MAX_ROUND_SUBMITS} max).`, 429);
+  }
   await settle();
   const current = roundNumberAt(Date.now());
   if (round !== current) throw new DomainError("ROUND_CLOSED", "That round already closed.", 409);
@@ -198,17 +217,10 @@ export async function recordProof(
   if (grid_hex.length !== 2 * order * order && grid_hex.length !== 4 * order * order) {
     throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
   }
-  // Accept both challenge shapes: prefixed (v3-round:…) and bare
-  // (round:…). Docs once showed the bare form — never punish miners
-  // for following instructions.
-  const salted = salt ? `:${salt}` : "";
-  const candidates = [
-    `v3-round:${round}:${user_id}${salted}`,
-    `${round}:${user_id}${salted}`,
-  ];
-  // Pure-TS verification: no binary needed, identical math (see proof-engine.ts).
+  // Accept both challenge shapes (see proof-challenge.ts — single spec).
+  // Pure-TS verification: no binary needed, identical math.
   let ok = false;
-  for (const c of candidates) {
+  for (const c of candidateChallenges({ round, userId: user_id, salt })) {
     if (verifyLocal(c, threshold, nonce, grid_hex, order)) {
       ok = true;
       break;
@@ -241,4 +253,15 @@ export async function roundWins(user_id: string, limit = 20) {
   return await sql`
     SELECT number AS round, winning_score AS score, reward, closed_at FROM physi_rounds
     WHERE winner_user_id = ${user_id} ORDER BY number DESC LIMIT ${Math.min(limit, 50)}`;
+}
+
+export async function recentRounds(limit = 20) {
+  const sql = getDb();
+  const rows = await sql<
+    { number: number; status: string; winning_score: number | null; reward: string; winner: string | null }[]
+  >`
+    SELECT r.number, r.status, r.winning_score, r.reward::text, u.nickname AS winner
+    FROM physi_rounds r LEFT JOIN physi_users u ON u.id = r.winner_user_id
+    ORDER BY r.number DESC LIMIT ${Math.min(limit, 50)}`;
+  return rows;
 }

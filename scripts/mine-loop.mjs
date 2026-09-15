@@ -28,31 +28,64 @@ if (!WALLET) {
 }
 
 console.log(`[miner] grinding for wallet ${WALLET} via ${SERVER}`);
+const stamp = () => new Date().toISOString().slice(11, 19);
+
+async function session() {
+  const r = await fetch(`${SERVER}/api/auth/session`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ user_id: WALLET }),
+  });
+  const j = await r.json();
+  if (!j.ok || !j.token) throw new Error("session failed: " + (j.message || r.status));
+  return j.token;
+}
+
+let token = await session().catch((e) => {
+  console.error("[miner] cannot authorize wallet:", e.message);
+  process.exit(1);
+});
+
 let submitted = 0;
 let best = 999;
 
 for (;;) {
   try {
+    // Round edge: never start a grind that can't finish before the flip.
+    try {
+      const rq = await fetch(`${SERVER}/api/mining?round=current`);
+      const rj = await rq.json();
+      if (rj.ok && typeof rj.ends_in_secs === "number" && rj.ends_in_secs < 15) {
+        console.log(`[${stamp()}] round ${rj.round} closes in ${rj.ends_in_secs}s — waiting it out`);
+        await new Promise((r2) => setTimeout(r2, (rj.ends_in_secs + 5) * 1000));
+        continue;
+      }
+    } catch {}
     const r = await fetch(`${SERVER}/api/mining`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({ user_id: WALLET }),
       signal: AbortSignal.timeout(150000),
     });
     const j = await r.json();
+    if (j.code === "BAD_TOKEN" || j.code === "REVOKED" || j.code === "NO_TOKEN") {
+      console.log(`[${stamp()}] session expired — re-authorizing`);
+      token = await session();
+      continue;
+    }
     if (j.ok) {
       submitted++;
       const s = j.leader?.score;
       if (typeof s === "number" && s < best) best = s;
       console.log(
-        `[miner] #${submitted} round ${j.round} in · leader score ${s ?? "?"} · best seen ${best}`
+        `[${stamp()}] #${submitted} round ${j.round} in · leader score ${s ?? "?"} · best seen ${best}`
       );
     } else {
-      console.log(`[miner] rejected: ${j.code || "?"} ${j.message || ""}`);
+      console.log(`[${stamp()}] rejected: ${j.code || "?"} ${j.message || ""}`);
       await new Promise((r2) => setTimeout(r2, 15000));
     }
   } catch (e) {
-    console.log(`[miner] error: ${String(e?.message || e).slice(0, 120)} — retrying`);
+    console.log(`[${stamp()}] error: ${String(e?.message || e).slice(0, 120)} — retrying`);
     await new Promise((r2) => setTimeout(r2, 15000));
   }
   await new Promise((r2) => setTimeout(r2, PAUSE_MS));
