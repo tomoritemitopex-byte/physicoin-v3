@@ -8,6 +8,15 @@ export type Tally = {
   promoted: boolean;
 };
 
+export async function voterWeight(voter_id: string): Promise<number> {
+  const sql = getDb();
+  const rows = await sql<{ w: string }[]>`
+    SELECT COALESCE(vote_weight_cached, authority_final, 1)::text AS w
+    FROM physi_users WHERE id = ${voter_id} LIMIT 1`;
+  if (!rows[0]) throw new DomainError("UNKNOWN_VOTER", "Voter not found.", 404);
+  return Number(rows[0].w) || 1;
+}
+
 /** Cast (or change) a weighted Yes/No/Cancel vote. Promotes on quorum. */
 export async function castVote(input: {
   verifier_id: string;
