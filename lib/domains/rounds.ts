@@ -255,8 +255,7 @@ export async function roundWins(user_id: string, limit = 20) {
     WHERE winner_user_id = ${user_id} ORDER BY number DESC LIMIT ${Math.min(limit, 50)}`;
 }
 
-export async function recentRounds(limit = 20) {
-  const sql = getDb();
+export async function recentRounds(limit = 20) {  const sql = getDb();
   const rows = await sql<
     { number: number; status: string; winning_score: number | null; reward: string; winner: string | null }[]
   >`
@@ -264,4 +263,17 @@ export async function recentRounds(limit = 20) {
     FROM physi_rounds r LEFT JOIN physi_users u ON u.id = r.winner_user_id
     ORDER BY r.number DESC LIMIT ${Math.min(limit, 50)}`;
   return rows;
+}
+
+export async function leaderboard(limit = 20) {
+  const sql = getDb();
+  return await sql<
+    { nickname: string; wins: number; earned: string; best_score: number | null }[]
+  >`
+    SELECT u.nickname, count(*)::int AS wins,
+      SUM(r.reward)::text AS earned, MIN(r.winning_score)::int AS best_score
+    FROM physi_rounds r JOIN physi_users u ON u.id = r.winner_user_id
+    WHERE r.status = 'closed' AND r.winner_user_id IS NOT NULL
+    GROUP BY u.nickname ORDER BY wins DESC, earned DESC
+    LIMIT ${Math.min(limit, 50)}`;
 }

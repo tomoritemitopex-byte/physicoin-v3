@@ -1,12 +1,14 @@
-import { recentRounds } from "@/lib/domains/rounds";
+import { recentRounds, leaderboard } from "@/lib/domains/rounds";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function RoundsPage() {
   let rounds: any[] = [];
+  let leaders: any[] = [];
   try {
     rounds = await recentRounds(30);
+    leaders = await leaderboard(10);
   } catch {
     rounds = [];
   }
@@ -16,6 +18,21 @@ export default async function RoundsPage() {
       <p className="mt-1 font-mono text-[11px] text-ink/50">
         Every round, every winner. Lowest grid takes the coin.
       </p>
+      {leaders.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-accent/30 bg-white p-4">
+          <p className="font-mono text-[11px] uppercase text-ink/50">Leaderboard</p>
+          {leaders.map((l, i) => (
+            <div key={l.nickname} className="mt-1 flex items-center justify-between font-mono text-xs">
+              <span className="font-black">
+                {i + 1}. @{l.nickname}
+              </span>
+              <span>
+                {l.wins} wins · +{l.earned} · best {l.best_score}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mt-4 space-y-2">
         {rounds.map((r) => (
           <div key={r.number} className="flex items-center justify-between rounded-xl border border-sky/20 bg-white p-3 font-mono text-xs">

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recentRounds } from "@/lib/domains/rounds";
+import { recentRounds, leaderboard } from "@/lib/domains/rounds";
 import { toErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
@@ -7,9 +7,13 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
+    const limit = Number(u.searchParams.get("limit")) || 20;
+    if (u.searchParams.get("view") === "leaders") {
+      return NextResponse.json({ ok: true, leaders: await leaderboard(limit) });
+    }
     return NextResponse.json({
       ok: true,
-      rounds: await recentRounds(Number(u.searchParams.get("limit")) || 20),
+      rounds: await recentRounds(limit),
     });
   } catch (e) {
     return toErrorResponse(e);
