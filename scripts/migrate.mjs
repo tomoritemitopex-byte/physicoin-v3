@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import postgres from "postgres";
@@ -31,22 +31,60 @@ if (bad.length > 0) {
 console.log(`[migrate] applying ${stmts.length} validated statements`);
 const sql = postgres(url, { max: 1 });
 let applied = 0;
-try {
-  for (const stmt of stmts) {
-    try {
-      await sql.unsafe(stmt);
-      applied++;
-    } catch (e) {
-      if (!String(e?.message || e).includes("already exists")) {
-        console.error(`[migrate] FAILED: ${stmt.slice(0, 120)}...`);
-        console.error(`[migrate] error: ${e?.message || e}`);
-        process.exitCode = 1;
-        break;
-      }
+let code = 0;
+async function applyOne(stmt, label) {
+  try {
+    await sql.unsafe(stmt);
+    applied++;
+  } catch (e) {
+    if (!String(e?.message || e).includes("already exists")) {
+      console.error(`[migrate] FAILED (${label}): ${stmt.slice(0, 120)}...`);
+      console.error(`[migrate] error: ${e?.message || e}`);
+      code = 1;
+      return false;
     }
   }
-  console.log(`[migrate] done (${applied}/${stmts.length} applied, rest already existed)`);
+  return true;
+}
+try {
+  for (const stmt of stmts) {
+    if (!(await applyOne(stmt, "schema.sql"))) break;
+  }
+  // 3. Append-only migrations: database/migrations/*.sql in order,
+  //    each applied once (tracked in physi_migrations).
+  if (code === 0) {
+    await sql.unsafe(`CREATE TABLE IF NOT EXISTS physi_migrations (
+      name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    const dir = resolve(__dirname, "../database/migrations");
+    let files = [];
+    try {
+      files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    } catch {}
+    for (const f of files) {
+      const done = await sql`SELECT name FROM physi_migrations WHERE name = ${f} LIMIT 1`;
+      if (done[0]) {
+        console.log(`[migrate] skip ${f} (already applied)`);
+        continue;
+      }
+      console.log(`[migrate] applying migration ${f}`);
+      const body = readFileSync(resolve(dir, f), "utf8");
+      const parts = body.split(/;\s*\n/).map((s) => s.trim()).filter(Boolean);
+      let okAll = true;
+      for (const stmt of parts) {
+        if (!(await applyOne(stmt, f))) {
+          okAll = false;
+          break;
+        }
+      }
+      if (!okAll) {
+        code = 1;
+        break;
+      }
+      await sql`INSERT INTO physi_migrations (name) VALUES (${f})`;
+    }
+  }
+  console.log(code === 0 ? `[migrate] done (${applied} statements applied)` : "[migrate] aborted with errors");
 } finally {
   await sql.end();
 }
-process.exit(process.exitCode || 0);
+process.exit(code);

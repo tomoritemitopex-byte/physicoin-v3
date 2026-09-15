@@ -62,6 +62,52 @@ export default function ProfilePage() {
     setMe(null);
   }
 
+  const [to, setTo] = useState("");
+  const [amount, setAmount] = useState("");
+  const [sendMsg, setSendMsg] = useState("");
+
+  async function sendCoins() {
+    setSendMsg("Sending…");
+    try {
+      const meRaw = localStorage.getItem("physi_profile");
+      const myId = meRaw ? JSON.parse(meRaw)?.id : null;
+      if (!myId) {
+        setSendMsg("No wallet loaded.");
+        return;
+      }
+      const target = await fetch(`/api/profile?nickname=${encodeURIComponent(to.trim().toLowerCase())}`).then((r) => r.json());
+      if (!target.ok) {
+        setSendMsg("Recipient not found — check the handle.");
+        return;
+      }
+      const sess = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: myId }),
+      }).then((r) => r.json());
+      if (!sess.ok) {
+        setSendMsg("Could not authorize wallet.");
+        return;
+      }
+      const r = await fetch("/api/wallet/send", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${sess.token}` },
+        body: JSON.stringify({ from_user_id: myId, to_user_id: target.user.id, amount: Number(amount) }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setSendMsg(`Sent ${amount} $PHY to @${target.user.nickname}`);
+        setTo("");
+        setAmount("");
+        refresh(myId);
+      } else {
+        setSendMsg(j.message || "Send failed.");
+      }
+    } catch {
+      setSendMsg("Network error.");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
       <h1 className="text-xl font-black">Profile</h1>
@@ -119,7 +165,26 @@ export default function ProfilePage() {
           <div className="rounded-2xl border border-sky/30 bg-white p-4">
             <p className="font-mono text-[11px] uppercase text-ink/50">Wallet</p>
             <p className="text-2xl font-black">{Number(me.mining_balance).toFixed(2)} $PHY</p>
-            <a href="/app/roadmap" className="mt-1 inline-block text-sm font-bold text-accent">
+            <div className="mt-3 flex gap-2">
+              <input
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                placeholder="send to @handle"
+                className="flex-1 rounded-lg border border-sky/30 px-3 py-2 text-sm"
+              />
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                inputMode="decimal"
+                className="w-24 rounded-lg border border-sky/30 px-3 py-2 text-sm"
+              />
+              <button onClick={sendCoins} className="rounded-full bg-forest px-4 py-2 text-sm font-bold text-white">
+                Send
+              </button>
+            </div>
+            {sendMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{sendMsg}</p>}
+            <a href="/app/roadmap" className="mt-2 inline-block text-sm font-bold text-accent">
               Vote on the Road →
             </a>
           </div>
