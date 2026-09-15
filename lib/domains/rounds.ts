@@ -5,26 +5,49 @@ import { mineProof, verifyProof } from "@/lib/proof";
 
 // Round mining: everyone grinds nonstop, ONE winner per round.
 // Lowest score wins the round; ties go to the earliest submission.
-// Round = 10 minutes. Winner takes ROUND_REWARD coins.
+// Rounds target ROUND_SECS; a near-flawless proof (score <= 2) closes
+// the round immediately. Difficulty retargets every round (mirrors the
+// Rust engine's retarget()): fast rounds tighten, slow rounds ease off,
+// and a flawless round grows the grid (lattice escalation, max 12).
 
-export const ROUND_SECS = 600;
+export const ROUND_SECS = 120;
 export const ROUND_REWARD = 1;
-export const ROUND_DIFFICULTY = 12;
 export const ROUND_NONCES = 2000;
+export const GENESIS_ORDER = 6;
+export const GENESIS_THRESHOLD = 10;
+export const MAX_ORDER = 12;
+export const CLOSE_EARLY_SCORE = 2;
 // Rounds count from this moment; changing it later starts a new chain.
 export const GENESIS_ISO = "2026-09-15T00:00:00Z";
+
+export function maxScoreForOrder(n: number): number {
+  return 4 * n * (n - 1) + n * n - 1;
+}
+
+export function openingThreshold(n: number): number {
+  return Math.max(4, Math.round(maxScoreForOrder(n) / 13));
+}
 
 export function roundNumberAt(when: number): number {
   return Math.max(0, Math.floor((when - Date.parse(GENESIS_ISO)) / (ROUND_SECS * 1000)));
 }
 
-async function ensureRound(n: number) {
+async function latestParams(): Promise<{ order: number; threshold: number }> {
   const sql = getDb();
+  const rows = await sql<{ o: number; d: number }[]>`
+    SELECT lattice_order AS o, difficulty AS d FROM physi_rounds ORDER BY number DESC LIMIT 1`;
+  if (!rows[0]) return { order: GENESIS_ORDER, threshold: GENESIS_THRESHOLD };
+  return { order: rows[0].o, threshold: rows[0].d };
+}
+
+async function ensureRound(n: number, order?: number, threshold?: number) {
+  const sql = getDb();
+  const p = order === undefined ? await latestParams() : { order, threshold: threshold as number };
   const start = new Date(Date.parse(GENESIS_ISO) + n * ROUND_SECS * 1000);
   const end = new Date(start.getTime() + ROUND_SECS * 1000);
   await sql`
-    INSERT INTO physi_rounds (number, starts_at, ends_at)
-    VALUES (${n}, ${start.toISOString()}, ${end.toISOString()})
+    INSERT INTO physi_rounds (number, starts_at, ends_at, lattice_order, difficulty)
+    VALUES (${n}, ${start.toISOString()}, ${end.toISOString()}, ${p.order}, ${p.threshold})
     ON CONFLICT (number) DO NOTHING`;
 }
 
@@ -37,9 +60,27 @@ export async function closeRound(n: number) {
   const best = await sql<{ user_id: string; nonce: string; score: number }[]>`
     SELECT user_id, nonce::text, score FROM physi_round_proofs
     WHERE round_number = ${n} ORDER BY score ASC, submitted_at ASC LIMIT 1`;
+  const info = await sql<{ s: string; o: number; d: number }[]>`
+    SELECT starts_at::text AS s, lattice_order AS o, difficulty AS d
+    FROM physi_rounds WHERE number = ${n} LIMIT 1`;
+  const order = info[0]?.o ?? GENESIS_ORDER;
+  const threshold = info[0]?.d ?? GENESIS_THRESHOLD;
+  const durationSecs = Math.max(0, Math.round((Date.now() - Date.parse(info[0]?.s || new Date().toISOString())) / 1000));
+  // Retarget for the NEXT round (mirrors engine retarget()).
+  let nextOrder = order;
+  let nextThreshold = threshold;
+  if (best[0] && best[0].score === 0) {
+    nextOrder = Math.min(order + 1, MAX_ORDER);
+    nextThreshold = openingThreshold(nextOrder);
+  } else if (durationSecs > (ROUND_SECS * 6) / 5) {
+    nextThreshold = Math.min(threshold + 1, maxScoreForOrder(order));
+  } else if (durationSecs < (ROUND_SECS * 4) / 5) {
+    nextThreshold = Math.max(threshold - 1, 1);
+  }
   if (!best[0]) {
     await sql`UPDATE physi_rounds SET status = 'closed', closed_at = NOW() WHERE number = ${n}`;
-    return { round: n, winner: null as string | null };
+    await ensureRound(n + 1, nextOrder, nextThreshold);
+    return { round: n, winner: null as string | null, next: { order: nextOrder, threshold: nextThreshold } };
   }
   const w = best[0];
   await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${ROUND_REWARD}) WHERE id = ${w.user_id}`;
@@ -58,7 +99,8 @@ export async function closeRound(n: number) {
   await sql`UPDATE physi_users SET rep_ghost_sig = ${sig}, ghost_sig_updated_at = NOW() WHERE id = ${w.user_id}`;
   await sql`UPDATE physi_rounds SET status = 'closed', winner_user_id = ${w.user_id},
     winning_score = ${w.score}, winning_nonce = ${w.nonce}, closed_at = NOW() WHERE number = ${n}`;
-  return { round: n, winner: w.user_id, score: w.score };
+  await ensureRound(n + 1, nextOrder, nextThreshold);
+  return { round: n, winner: w.user_id, score: w.score, next: { order: nextOrder, threshold: nextThreshold } };
 }
 
 /** Close every finished round before doing anything else. */
@@ -90,7 +132,7 @@ export async function currentRound() {
   const n = roundNumberAt(Date.now());
   await ensureRound(n);
   const sql = getDb();
-  const [r] = await sql`SELECT number, starts_at, ends_at, status FROM physi_rounds WHERE number = ${n} LIMIT 1`;
+  const [r] = await sql`SELECT number, starts_at, ends_at, status, lattice_order, difficulty FROM physi_rounds WHERE number = ${n} LIMIT 1`;
   const lead = await sql<{ user_id: string; score: number }[]>`
     SELECT user_id, score FROM physi_round_proofs
     WHERE round_number = ${n} ORDER BY score ASC, submitted_at ASC LIMIT 1`;
@@ -101,6 +143,8 @@ export async function currentRound() {
     reward: ROUND_REWARD,
     leader: lead[0] || null,
     status: r.status,
+    lattice_order: r.lattice_order,
+    difficulty: r.difficulty,
   };
 }
 
@@ -112,10 +156,13 @@ export async function grindAndSubmit(user_id: string) {
   await settle();
   const n = roundNumberAt(Date.now());
   await ensureRound(n);
+  const [r] = await sql`SELECT lattice_order, difficulty FROM physi_rounds WHERE number = ${n} LIMIT 1`;
+  const order = r.lattice_order;
+  const threshold = r.difficulty;
   // Random salt per attempt: every grind is new work, never a reprint.
   const salt = randomBytes(8).toString("hex");
   const challenge = `v3-round:${n}:${user_id}:${salt}`;
-  const proof = await mineProof(challenge, ROUND_DIFFICULTY, ROUND_NONCES);
+  const proof = await mineProof(challenge, threshold, ROUND_NONCES, order);
   return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score, salt);
 }
 
@@ -134,11 +181,18 @@ export async function recordProof(
   await settle();
   const current = roundNumberAt(Date.now());
   if (round !== current) throw new DomainError("ROUND_CLOSED", "That round already closed.", 409);
+  const [r] = await sql`SELECT lattice_order, difficulty FROM physi_rounds WHERE number = ${round} LIMIT 1`;
+  const order = r?.lattice_order ?? GENESIS_ORDER;
+  const threshold = r?.difficulty ?? GENESIS_THRESHOLD;
+  const expectLen = order * order * 2 * 2; // grid bytes (2*N*N) as hex chars
+  if (grid_hex.length !== expectLen) {
+    throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
+  }
   const challenge = salt ? `v3-round:${round}:${user_id}:${salt}` : `v3-round:${round}:${user_id}`;
-  const ok = await verifyProof(challenge, 155, nonce, grid_hex).catch(() => false);
+  const ok = await verifyProof(challenge, threshold, nonce, grid_hex, order).catch(() => false);
   if (!ok) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
-  if (score > ROUND_DIFFICULTY) {
-    throw new DomainError("TOO_WEAK", `Score ${score} misses the round bar (${ROUND_DIFFICULTY}).`, 422);
+  if (score > threshold) {
+    throw new DomainError("TOO_WEAK", `Score ${score} misses the round bar (${threshold}).`, 422);
   }
   const gridBytes = Buffer.from(grid_hex, "hex");
   try {
@@ -150,6 +204,10 @@ export async function recordProof(
       throw new DomainError("DUPLICATE_PROOF", "That proof is already in.", 409);
     }
     throw e;
+  }
+  // Near-flawless proof ends the round on the spot — speed escalates.
+  if (score <= CLOSE_EARLY_SCORE) {
+    await closeRound(round);
   }
   return currentRound();
 }

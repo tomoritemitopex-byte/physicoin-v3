@@ -34,6 +34,7 @@ export async function mineProof(
   challenge: string,
   maxScore: number,
   maxNonces: number,
+  order = 6,
   timeoutMs = 120_000
 ): Promise<MinedProof> {
   if (!challenge || maxScore < 0 || maxNonces <= 0) {
@@ -41,9 +42,11 @@ export async function mineProof(
   }
   const bin = binPath();
   try {
-    const { stdout } = await run(bin, ["mine", challenge, String(maxScore), String(maxNonces)], {
-      timeout: timeoutMs,
-    });
+    const { stdout } = await run(
+      bin,
+      ["mine", challenge, String(maxScore), String(maxNonces), String(order)],
+      { timeout: timeoutMs }
+    );
     const p = JSON.parse(stdout.trim()) as MinedProof;
     if (typeof p.nonce !== "number" || typeof p.score !== "number" || typeof p.grid_hex !== "string") {
       throw new ProofError("PROOF_FAILED", "engine returned a malformed proof");
@@ -63,6 +66,7 @@ export async function verifyProof(
   maxScore: number,
   nonce: number,
   grid_hex: string,
+  order = 6,
   timeoutMs = 15_000
 ): Promise<boolean> {
   if (!challenge || !grid_hex) throw new ProofError("PROOF_BAD_INPUT", "challenge and grid_hex are required");
@@ -70,7 +74,7 @@ export async function verifyProof(
   try {
     const { stdout } = await run(
       bin,
-      ["verify", challenge, String(maxScore), String(nonce), grid_hex],
+      ["verify", challenge, String(maxScore), String(nonce), grid_hex, String(order)],
       { timeout: timeoutMs }
     );
     return stdout.trim() === "OK";

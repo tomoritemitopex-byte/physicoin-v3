@@ -5,6 +5,9 @@
 //! module will call it instead of returning `QuantumHardwareAbsent`.
 //! Until then every function here reports absence and the protocol mines
 //! classically. Nothing here pretends otherwise.
+//!
+//! The stub speaks order 6 only; larger lattices are classical-only
+//! until quantum hardware exists to collapse them.
 
 use super::Grid;
 
@@ -19,12 +22,12 @@ pub struct QuantumHardwareAbsent;
 /// `Err(QuantumHardwareAbsent)`. When a real shim lands, its contract will
 /// be: fills a 6x6 rank/regiment grid from collapsed qubit measurements,
 /// with all 72 bytes < 6, borrowed slice living for the call.
-pub unsafe fn collapse_stub(_challenge: &[u8]) -> Result<Grid, QuantumHardwareAbsent> {
+pub unsafe fn collapse_stub(_challenge: &[u8]) -> Result<Grid<6>, QuantumHardwareAbsent> {
     Err(QuantumHardwareAbsent)
 }
 
 /// Safe wrapper the protocol calls: probe hardware, report absence.
-pub fn try_quantum_mine(challenge: &[u8]) -> Result<Grid, QuantumHardwareAbsent> {
+pub fn try_quantum_mine(challenge: &[u8]) -> Result<Grid<6>, QuantumHardwareAbsent> {
     // SAFETY: collapse_stub performs no unsafe operations while no
     // hardware shim is linked (it returns Err immediately).
     unsafe { collapse_stub(challenge) }

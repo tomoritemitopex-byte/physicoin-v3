@@ -63,12 +63,15 @@ export default function MiningPage() {
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
       <h1 className="text-xl font-black">Mining</h1>
       <p className="mt-1 text-sm text-ink/70">
-        One winner every 10 minutes. Lowest grid score takes the round and its coin.
+        One winner per round. Lowest grid score takes the coin — and fast rounds raise the bar.
       </p>
       {round && (
         <div className="mt-3 rounded-2xl border border-sky/30 bg-white p-4 font-mono text-xs">
           <p>
-            Round {round.round} · closes in {Math.floor(round.ends_in_secs / 60)}m {round.ends_in_secs % 60}s
+            Round {round.round} · {round.lattice_order}x{round.lattice_order} grid · bar {round.difficulty}
+          </p>
+          <p>
+            closes in {Math.floor(round.ends_in_secs / 60)}m {round.ends_in_secs % 60}s
           </p>
           <p>Reward {round.reward} $PHY · Leader score {round.leader ? round.leader.score : "— none yet —"}</p>
         </div>

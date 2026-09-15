@@ -1,29 +1,29 @@
 //! physi-proof — puzzle proof engine for PhysiCoin v3.
 //!
-//! The puzzle: arrange a 6x6 grid where every row and column holds each
-//! rank (0..6) and each regiment (0..6) exactly once (a Graeco-Latin
-//! square). Classically the perfect grid is unreachable (Euler/Tarry),
-//! so miners grind: each nonce seeds a candidate, matrix hill-climbing
-//! improves it, and the best grid under the difficulty threshold wins.
-//! Verification is cheap: re-derive from (challenge, nonce) and re-score.
-//! No dependencies — SHA-256 and the PRG are hand-rolled below.
+//! The puzzle: arrange an NxN grid where every row and column holds each
+//! rank and each regiment exactly once, AND all N*N pairs are distinct
+//! (a Graeco-Latin square). Order 6 is classically impossible
+//! (Euler/Tarry) — miners grind approximations, verification is cheap.
+//! Higher orders are bigger searches; the adjuster escalates the lattice
+//! when an order gets too easy. No dependencies.
 
-pub const N: usize = 6;
 /// Fixed hill-climb budget per nonce. Same for miner and verifier.
 pub const CLIMB_ITERS: usize = 1500;
+/// Highest lattice order this engine implements.
+pub const MAX_ORDER: u8 = 12;
 
-/// A 6x6 grid: each cell holds a rank and a regiment (both 0..6).
+/// An NxN grid: each cell holds a rank and a regiment (both < N).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Grid {
+pub struct Grid<const N: usize> {
     pub rank: [[u8; N]; N],
     pub reg: [[u8; N]; N],
 }
 
 /// A mined proof: the winning nonce, its grid, and the verified score.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Proof {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Proof<const N: usize> {
     pub nonce: u64,
-    pub grid: Grid,
+    pub grid: Grid<N>,
     pub score: u32,
 }
 
@@ -122,44 +122,42 @@ fn seed_prg(challenge: &[u8], nonce: u64) -> SplitMix64 {
 }
 
 // ---------------------------------------------------------------------------
-// Scoring: count rank/regiment repeats in every row and column, PLUS
-// repeated (rank, regiment) pairs across the whole grid.
-// score == 0 means a perfect Graeco-Latin square — all rows, all columns
-// AND all 36 pairs distinct. (Pairs are the hard part: Euler/Tarry.)
+// Scoring: row/column repeats per trait + repeated pairs grid-wide.
+// score == 0 is a perfect Graeco-Latin square (impossible at order 6).
 // ---------------------------------------------------------------------------
 
-fn line_conflicts(vals: &[u8; N]) -> u32 {
-    let mut mask: u8 = 0;
+fn line_conflicts(vals: &[u8]) -> u32 {
+    let mut mask: u32 = 0;
     for &v in vals.iter() {
-        mask |= 1u8 << v;
+        mask |= 1u32 << v;
     }
-    (N as u32) - (mask.count_ones())
+    (vals.len() as u32) - mask.count_ones()
 }
 
-pub fn score(g: &Grid) -> u32 {
+pub fn score<const N: usize>(g: &Grid<N>) -> u32 {
     let mut total = 0u32;
     for i in 0..N {
-        let mut row_rank = [0u8; N];
-        let mut row_reg = [0u8; N];
-        let mut col_rank = [0u8; N];
-        let mut col_reg = [0u8; N];
+        let mut row_rank = [0u8; 64];
+        let mut row_reg = [0u8; 64];
+        let mut col_rank = [0u8; 64];
+        let mut col_reg = [0u8; 64];
         for j in 0..N {
             row_rank[j] = g.rank[i][j];
             row_reg[j] = g.reg[i][j];
             col_rank[j] = g.rank[j][i];
             col_reg[j] = g.reg[j][i];
         }
-        total += line_conflicts(&row_rank) + line_conflicts(&row_reg);
-        total += line_conflicts(&col_rank) + line_conflicts(&col_reg);
+        total += line_conflicts(&row_rank[..N]) + line_conflicts(&row_reg[..N]);
+        total += line_conflicts(&col_rank[..N]) + line_conflicts(&col_reg[..N]);
     }
-    // Pair uniqueness over the whole grid (36 cells, 36 possible pairs).
-    let mut seen = [false; 36];
+    // Pair uniqueness over the whole grid (N*N cells, N*N possible pairs).
+    let mut seen = [false; 256];
     for i in 0..N {
         for j in 0..N {
             seen[(g.rank[i][j] as usize) * N + (g.reg[i][j] as usize)] = true;
         }
     }
-    total += 36 - (seen.iter().filter(|&&b| b).count() as u32);
+    total += (N * N) as u32 - (seen[..N * N].iter().filter(|&&b| b).count() as u32);
     total
 }
 
@@ -169,8 +167,11 @@ pub fn score(g: &Grid) -> u32 {
 // nonces while the verifier re-runs exactly one.
 // ---------------------------------------------------------------------------
 
-fn shuffled_row(prg: &mut SplitMix64) -> [u8; N] {
-    let mut row = [0u8, 1, 2, 3, 4, 5];
+fn shuffled_row<const N: usize>(prg: &mut SplitMix64) -> [u8; 64] {
+    let mut row = [0u8; 64];
+    for i in 0..N {
+        row[i] = i as u8;
+    }
     for i in (1..N).rev() {
         let j = prg.below(i + 1);
         row.swap(i, j);
@@ -178,16 +179,25 @@ fn shuffled_row(prg: &mut SplitMix64) -> [u8; N] {
     row
 }
 
-fn derive(challenge: &[u8], nonce: u64) -> Grid {
+fn derive<const N: usize>(challenge: &[u8], nonce: u64) -> Grid<N> {
     let mut prg = seed_prg(challenge, nonce);
-    let mut g = Grid {
-        rank: [[0u8; N]; N],
-        reg: [[0u8; N]; N],
-    };
+    let mut rank = [[0u8; 64]; 64];
+    let mut reg = [[0u8; 64]; 64];
     // Seed: every row is a random permutation (rows Latin by construction).
     for i in 0..N {
-        g.rank[i] = shuffled_row(&mut prg);
-        g.reg[i] = shuffled_row(&mut prg);
+        let r = shuffled_row::<N>(&mut prg);
+        let v = shuffled_row::<N>(&mut prg);
+        for j in 0..N {
+            rank[i][j] = r[j];
+            reg[i][j] = v[j];
+        }
+    }
+    let mut g = Grid::<N> { rank: [[0u8; N]; N], reg: [[0u8; N]; N] };
+    for i in 0..N {
+        for j in 0..N {
+            g.rank[i][j] = rank[i][j];
+            g.reg[i][j] = reg[i][j];
+        }
     }
     // Hill-climb: random swaps, keep improvements. Fixed budget.
     let mut best = score(&g);
@@ -226,58 +236,65 @@ fn derive(challenge: &[u8], nonce: u64) -> Grid {
 }
 
 // ---------------------------------------------------------------------------
-// Public API: mine + verify
+// Public API: mine + verify (generic over lattice order)
 // ---------------------------------------------------------------------------
 
-/// Grind nonces until a grid scores at or under `difficulty`
-/// (lower = harder). Returns `None` if the nonce budget runs out.
-pub fn mine(challenge: &[u8], difficulty: u32, max_nonces: u64) -> Option<Proof> {
+/// Grind nonces until a grid scores at or under `difficulty`.
+/// Returns `None` if the nonce budget runs out.
+pub fn mine<const N: usize>(challenge: &[u8], difficulty: u32, max_nonces: u64) -> Option<Proof<N>> {
     for nonce in 0..max_nonces {
-        let grid = derive(challenge, nonce);
+        let grid = derive::<N>(challenge, nonce);
         let s = score(&grid);
         if s <= difficulty {
-            return Some(Proof { nonce, grid, score: s });
+            return Some(Proof::<N> { nonce, grid, score: s });
         }
     }
     None
 }
 
-/// Parallel miner (rayon): same result as `mine` — the LOWEST winning
-/// nonce — found with all CPU cores grinding different nonces at once.
-pub fn mine_parallel(challenge: &[u8], difficulty: u32, max_nonces: u64) -> Option<Proof> {
+/// Parallel miner (rayon): same result as `mine` — the LOWEST winning nonce.
+pub fn mine_parallel<const N: usize>(challenge: &[u8], difficulty: u32, max_nonces: u64) -> Option<Proof<N>> {
     use rayon::prelude::*;
     (0..max_nonces).into_par_iter().find_first(|&nonce| {
-        score(&derive(challenge, nonce)) <= difficulty
+        score(&derive::<N>(challenge, nonce)) <= difficulty
     }).map(|nonce| {
-        let grid = derive(challenge, nonce);
+        let grid = derive::<N>(challenge, nonce);
         let s = score(&grid);
-        Proof { nonce, grid, score: s }
+        Proof::<N> { nonce, grid, score: s }
     })
 }
 
 /// Cheap check: the grid must be EXACTLY what (challenge, nonce) derives
 /// to (re-run once), its score must match the claim and beat difficulty.
-pub fn verify(challenge: &[u8], proof: &Proof, difficulty: u32) -> bool {
+pub fn verify<const N: usize>(challenge: &[u8], proof: &Proof<N>, difficulty: u32) -> bool {
     if proof.score > difficulty {
         return false;
     }
-    let grid = derive(challenge, proof.nonce);
+    let grid = derive::<N>(challenge, proof.nonce);
     grid == proof.grid && score(&grid) == proof.score
 }
 
 // ---------------------------------------------------------------------------
-// Protocol layer: difficulty, retargeting, dual-execution submit.
+// Protocol layer: difficulty, retargeting with lattice escalation,
+// dual-execution submit.
 // ---------------------------------------------------------------------------
 
-/// Worst possible score (uniform grid): 120 line + 35 pair conflicts.
-pub const MAX_SCORE: u32 = 155;
-/// Lattice order actually implemented by this engine.
-pub const IMPLEMENTED_LATTICE_ORDER: u8 = 6;
+/// Worst possible score at order N: 4N(N-1) line + (N^2-1) pair conflicts.
+pub fn max_score_for_order(n: u8) -> u32 {
+    let n = n as u32;
+    4 * n * (n - 1) + n * n - 1
+}
+
+/// Opening threshold estimate for a fresh order (~1/13 of worst).
+/// Retargeting corrects it within a few rounds.
+pub fn opening_threshold(n: u8) -> u32 {
+    (max_score_for_order(n) / 13).max(4)
+}
 
 /// Network difficulty: which lattice, and what score beats it.
-/// Calibration (6x6, release build): <=16 instant, <=10 ~dozens of
-/// nonces, <=8 ~hundreds. 0 is classically unreachable (Euler/Tarry) —
-/// a 0 submission is treated as a flawless (quantum) signature.
+/// Calibration (order 6): <=16 instant, <=10 ~dozens of nonces,
+/// <=8 ~hundreds. 0 is classically unreachable at order 6 — a 0
+/// submission is treated as a flawless (quantum) signature.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Difficulty {
     pub lattice_order: u8,
@@ -294,25 +311,22 @@ pub struct BlockSample {
 }
 
 /// Retarget difficulty from recent blocks toward `target_secs` per block.
-/// - Any flawless (score 0) submission halves the threshold: the network
-///   got stronger, so the puzzle must get harder. Lattice-order escalation
-///   stays parked at 6 until larger lattices are implemented — scheduling
-///   an unbuildable order today would stall the chain, so we never do.
-/// - Slow blocks ease off (+1, capped at MAX_SCORE); fast blocks tighten
+/// - Any flawless (score 0) submission escalates the LATTICE: order + 1
+///   (capped at MAX_ORDER) with a fresh opening threshold. The grid grows
+///   because the old one got solved.
+/// - Slow blocks ease off (+1, capped at worst); fast blocks tighten
 ///   (-1, floored at 1); on-target blocks change nothing.
 pub fn retarget(prev: Difficulty, target_secs: u64, samples: &[BlockSample]) -> Difficulty {
     if samples.is_empty() {
         return prev;
     }
     if samples.iter().any(|s| s.score == 0) {
-        return Difficulty {
-            lattice_order: IMPLEMENTED_LATTICE_ORDER,
-            max_score: (prev.max_score / 2).max(1),
-        };
+        let order = (prev.lattice_order + 1).min(MAX_ORDER);
+        return Difficulty { lattice_order: order, max_score: opening_threshold(order) };
     }
     let avg = samples.iter().map(|s| s.interval_secs).sum::<u64>() / (samples.len() as u64);
     if avg > target_secs * 6 / 5 {
-        Difficulty { max_score: (prev.max_score + 1).min(MAX_SCORE), ..prev }
+        Difficulty { max_score: (prev.max_score + 1).min(max_score_for_order(prev.lattice_order)), ..prev }
     } else if avg < target_secs * 4 / 5 {
         Difficulty { max_score: prev.max_score.saturating_sub(1).max(1), ..prev }
     } else {
@@ -322,57 +336,62 @@ pub fn retarget(prev: Difficulty, target_secs: u64, samples: &[BlockSample]) -> 
 
 pub mod quantum;
 
-/// Dual-execution submit: probe the quantum hook first, fall back to the
-/// classical parallel grind. Today the hook always reports hardware
-/// absent, so every block is classically mined — the quantum path is
-/// wired and waiting, not pretending.
+/// Dual-execution submit: probe the quantum hook first (order 6 only),
+/// fall back to the classical parallel grind.
 #[derive(Debug, PartialEq, Eq)]
 pub enum SubmitError {
     UnsupportedLatticeOrder(u8),
     BudgetExhausted,
 }
 
-pub fn submit(challenge: &[u8], diff: &Difficulty, max_nonces: u64) -> Result<Proof, SubmitError> {
-    if diff.lattice_order != IMPLEMENTED_LATTICE_ORDER {
+pub fn submit<const N: usize>(challenge: &[u8], diff: &Difficulty, max_nonces: u64) -> Result<Proof<N>, SubmitError> {
+    if diff.lattice_order != N as u8 {
         return Err(SubmitError::UnsupportedLatticeOrder(diff.lattice_order));
     }
-    if let Ok(grid) = quantum::try_quantum_mine(challenge) {
-        let s = score(&grid);
-        if s <= diff.max_score {
-            return Ok(Proof { nonce: u64::MAX, grid, score: s });
+    if N == 6 {
+        if let Ok(grid) = quantum::try_quantum_mine(challenge) {
+            let s = score(&grid);
+            if s <= diff.max_score {
+                return Ok(Proof::<N> { nonce: u64::MAX, grid: convert_6(grid), score: s });
+            }
         }
-        // Flawless path failed its own bar (cannot happen while the
-        // stub is absent) — fall through to classical mining.
     }
-    mine_parallel(challenge, diff.max_score, max_nonces).ok_or(SubmitError::BudgetExhausted)
+    mine_parallel::<N>(challenge, diff.max_score, max_nonces).ok_or(SubmitError::BudgetExhausted)
 }
 
 /// Protocol-level verify: lattice order must match, then the cheap check.
-pub fn verify_protocol(challenge: &[u8], proof: &Proof, diff: &Difficulty) -> bool {
-    diff.lattice_order == IMPLEMENTED_LATTICE_ORDER && verify(challenge, proof, diff.max_score)
+pub fn verify_protocol<const N: usize>(challenge: &[u8], proof: &Proof<N>, diff: &Difficulty) -> bool {
+    diff.lattice_order == N as u8 && verify::<N>(challenge, proof, diff.max_score)
 }
 
 // ---------------------------------------------------------------------------
-// Byte encoding (72-byte grid, 84-byte proof) for storage / transport.
+// Byte encoding (2*N*N bytes grid) for storage / transport.
 // ---------------------------------------------------------------------------
 
-impl Grid {
-    pub fn to_bytes(&self) -> [u8; 72] {
-        let mut out = [0u8; 72];
+impl<const N: usize> Grid<N> {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(2 * N * N);
         for i in 0..N {
             for j in 0..N {
-                out[i * N + j] = self.rank[i][j];
-                out[36 + i * N + j] = self.reg[i][j];
+                out.push(self.rank[i][j]);
+            }
+        }
+        for i in 0..N {
+            for j in 0..N {
+                out.push(self.reg[i][j]);
             }
         }
         out
     }
-    pub fn from_bytes(b: &[u8; 72]) -> Option<Grid> {
-        let mut g = Grid { rank: [[0u8; N]; N], reg: [[0u8; N]; N] };
+    pub fn from_bytes(b: &[u8]) -> Option<Grid<N>> {
+        if b.len() != 2 * N * N {
+            return None;
+        }
+        let mut g = Grid::<N> { rank: [[0u8; N]; N], reg: [[0u8; N]; N] };
         for i in 0..N {
             for j in 0..N {
                 let r = b[i * N + j];
-                let v = b[36 + i * N + j];
+                let v = b[N * N + i * N + j];
                 if r >= N as u8 || v >= N as u8 {
                     return None;
                 }
@@ -384,28 +403,46 @@ impl Grid {
     }
 }
 
-impl Proof {
-    pub fn to_bytes(&self) -> [u8; 84] {
-        let mut out = [0u8; 84];
-        out[..8].copy_from_slice(&self.nonce.to_le_bytes());
-        out[8..12].copy_from_slice(&self.score.to_le_bytes());
-        out[12..].copy_from_slice(&self.grid.to_bytes());
+impl<const N: usize> Proof<N> {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(12 + 2 * N * N);
+        out.extend_from_slice(&self.nonce.to_le_bytes());
+        out.extend_from_slice(&self.score.to_le_bytes());
+        out.extend_from_slice(&self.grid.to_bytes());
         out
     }
-    pub fn from_bytes(b: &[u8; 84]) -> Option<Proof> {
-        let mut gb = [0u8; 72];
-        gb.copy_from_slice(&b[12..]);
-        let grid = Grid::from_bytes(&gb)?;
+    pub fn from_bytes(b: &[u8]) -> Option<Proof<N>> {
+        if b.len() != 12 + 2 * N * N {
+            return None;
+        }
         let mut nb = [0u8; 8];
         nb.copy_from_slice(&b[..8]);
         let mut sb = [0u8; 4];
         sb.copy_from_slice(&b[8..12]);
-        Some(Proof {
+        let grid = Grid::<N>::from_bytes(&b[12..])?;
+        Some(Proof::<N> {
             nonce: u64::from_le_bytes(nb),
             grid,
             score: u32::from_le_bytes(sb),
         })
     }
+}
+
+// ---------------------------------------------------------------------------
+// Internal: bridge the order-6 quantum stub into generic code.
+// The stub only speaks 6x6; submit() only calls this when N == 6.
+// ---------------------------------------------------------------------------
+
+fn convert_6<const N: usize>(g: Grid<6>) -> Grid<N> {
+    assert!(N == 6, "quantum stub only implements order 6");
+    let mut out = Grid::<N> { rank: [[0u8; N]; N], reg: [[0u8; N]; N] };
+    for i in 0..N {
+        for j in 0..N {
+            out.rank[i][j] = g.rank[i][j];
+            out.reg[i][j] = g.reg[i][j];
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -430,100 +467,97 @@ mod tests {
 
     #[test]
     fn uniform_grid_scores_max() {
-        // Every line: 1 distinct value out of 6 -> 5 conflicts per trait.
-        // 12 lines x 2 traits x 5 = 120, plus 35 pair conflicts (1 pair seen) = 155.
-        let g = Grid { rank: [[0u8; N]; N], reg: [[0u8; N]; N] };
+        // Order 6: 12 lines x 2 traits x 5 + 35 pairs = 155.
+        let g = Grid::<6> { rank: [[0u8; 6]; 6], reg: [[0u8; 6]; 6] };
         assert_eq!(score(&g), 155);
+        assert_eq!(score(&g), max_score_for_order(6));
     }
 
     #[test]
     fn cyclic_latin_rows_score_column_conflicts_only() {
-        // Ranks: cyclic Latin square (rows AND columns Latin for ranks).
-        // Regs: uniform -> max reg conflicts. Ranks contribute 0.
-        // Pairs: (c, 0) for c in 0..6 -> 6 distinct of 36 -> 30 pair conflicts.
-        let mut g = Grid { rank: [[0u8; N]; N], reg: [[0u8; N]; N] };
-        for i in 0..N {
-            for j in 0..N {
-                g.rank[i][j] = ((i + j) % N) as u8;
+        let mut g = Grid::<6> { rank: [[0u8; 6]; 6], reg: [[0u8; 6]; 6] };
+        for i in 0..6 {
+            for j in 0..6 {
+                g.rank[i][j] = ((i + j) % 6) as u8;
             }
         }
-        // ranks: 0 conflicts; regs: 12 lines x 5 = 60; pairs: 30. Total 90.
+        // ranks 0 + regs 60 + pairs 30 = 90.
         assert_eq!(score(&g), 90);
     }
 
     #[test]
     fn derive_is_deterministic() {
-        let a = derive(b"physicoin-test", 7);
-        let b = derive(b"physicoin-test", 7);
+        let a = derive::<6>(b"physicoin-test", 7);
+        let b = derive::<6>(b"physicoin-test", 7);
         assert_eq!(a, b);
-        let c = derive(b"physicoin-test", 8);
+        let c = derive::<6>(b"physicoin-test", 8);
         assert_ne!(a, c);
     }
 
     #[test]
     fn mine_easy_always_succeeds_and_verifies() {
-        let p = mine(b"physicoin-test", 120, 4).expect("trivial difficulty must hit");
-        assert!(verify(b"physicoin-test", &p, 120));
+        let p = mine::<6>(b"physicoin-test", 155, 4).expect("trivial difficulty must hit");
+        assert!(verify::<6>(b"physicoin-test", &p, 155));
     }
 
     #[test]
     fn verify_rejects_tampering() {
-        let p = mine(b"physicoin-test", 120, 4).expect("proof");
-        // Wrong challenge.
-        assert!(!verify(b"other-challenge", &p, 120));
-        // Tampered grid.
-        let mut bad = p;
-        bad.grid.rank[0][0] = (bad.grid.rank[0][0] + 1) % N as u8;
-        assert!(!verify(b"physicoin-test", &bad, 120));
-        // Lied-about score.
-        let mut bad2 = p;
+        let p = mine::<6>(b"physicoin-test", 155, 4).expect("proof");
+        assert!(!verify::<6>(b"other-challenge", &p, 155));
+        let mut bad = p.clone();
+        bad.grid.rank[0][0] = (bad.grid.rank[0][0] + 1) % 6;
+        assert!(!verify::<6>(b"physicoin-test", &bad, 155));
+        let mut bad2 = p.clone();
         bad2.score = 0;
-        assert!(!verify(b"physicoin-test", &bad2, 120));
-        // Difficulty not met.
-        assert!(!verify(b"physicoin-test", &p, 0));
+        assert!(!verify::<6>(b"physicoin-test", &bad2, 155));
+        assert!(!verify::<6>(b"physicoin-test", &p, 0));
     }
 
     #[test]
     fn classical_grind_cannot_reach_perfection_cheaply() {
-        // Fixed tiny budget: no nonce in range reaches the fabled 0.
-        // (Deterministic — same result on every run.)
         let mut best = u32::MAX;
         for nonce in 0..50 {
-            best = best.min(score(&derive(b"physicoin-test", nonce)));
+            best = best.min(score(&derive::<6>(b"physicoin-test", nonce)));
         }
         assert!(best > 0, "6x6 perfection must stay out of cheap reach");
     }
 
     #[test]
-    fn bytes_round_trip() {        let p = mine(b"physicoin-test", 120, 4).expect("proof");
+    fn bytes_round_trip() {
+        let p = mine::<6>(b"physicoin-test", 155, 4).expect("proof");
         let bytes = p.to_bytes();
-        assert_eq!(bytes.len(), 84);
-        let back = Proof::from_bytes(&bytes).expect("round trip");
+        assert_eq!(bytes.len(), 12 + 72);
+        let back = Proof::<6>::from_bytes(&bytes).expect("round trip");
         assert_eq!(p, back);
-        assert!(verify(b"physicoin-test", &back, 120));
-        let mut bad = bytes;
-        bad[12] = 9; // invalid cell value
-        assert!(Proof::from_bytes(&bad).is_none());
+        assert!(verify::<6>(b"physicoin-test", &back, 155));
+        let mut bad = bytes.clone();
+        bad[12] = 9;
+        assert!(Proof::<6>::from_bytes(&bad).is_none());
+    }
+
+    #[test]
+    fn order_seven_runs_and_scores() {
+        // 7x7: engine runs, worst case matches the formula.
+        let g = Grid::<7> { rank: [[0u8; 7]; 7], reg: [[0u8; 7]; 7] };
+        assert_eq!(score(&g), max_score_for_order(7));
+        let d = derive::<7>(b"physicoin-test", 3);
+        assert!(score(&d) < max_score_for_order(7));
+        let p = mine::<7>(b"physicoin-test", 200, 8).expect("7x7 easy mine");
+        assert!(verify::<7>(b"physicoin-test", &p, 200));
+        assert_eq!(p.grid.to_bytes().len(), 98);
     }
 
     #[test]
     fn parallel_matches_serial() {
-        let s = mine(b"physicoin-test", 60, 64).expect("serial proof");
-        let p = mine_parallel(b"physicoin-test", 60, 64).expect("parallel proof");
+        let s = mine::<6>(b"physicoin-test", 60, 64).expect("serial proof");
+        let p = mine_parallel::<6>(b"physicoin-test", 60, 64).expect("parallel proof");
         assert_eq!(s, p, "parallel must find the same lowest winning nonce");
     }
 
     #[test]
     fn retarget_behaves() {
         let d = Difficulty { lattice_order: 6, max_score: 10 };
-        // No data -> unchanged.
         assert_eq!(retarget(d, 60, &[]), d);
-        // Flawless submission -> threshold halves, order parked at 6.
-        let esc = retarget(d, 60, &[BlockSample { score: 0, interval_secs: 1 }]);
-        assert_eq!(esc, Difficulty { lattice_order: 6, max_score: 5 });
-        // Floor at 1, never 0 (0 would demand the impossible every block).
-        let tiny = Difficulty { lattice_order: 6, max_score: 1 };
-        assert_eq!(retarget(tiny, 60, &[BlockSample { score: 0, interval_secs: 1 }]).max_score, 1);
         // Slow blocks ease off; fast blocks tighten; on-target holds.
         let slow = [BlockSample { score: 9, interval_secs: 120 }];
         assert_eq!(retarget(d, 60, &slow).max_score, 11);
@@ -534,17 +568,29 @@ mod tests {
     }
 
     #[test]
+    fn retarget_escalates_the_lattice_on_flawless() {
+        let d = Difficulty { lattice_order: 6, max_score: 10 };
+        let esc = retarget(d, 60, &[BlockSample { score: 0, interval_secs: 1 }]);
+        assert_eq!(esc.lattice_order, 7);
+        assert_eq!(esc.max_score, opening_threshold(7));
+        // Floor: order never exceeds MAX_ORDER.
+        let top = Difficulty { lattice_order: MAX_ORDER, max_score: 5 };
+        let esc2 = retarget(top, 60, &[BlockSample { score: 0, interval_secs: 1 }]);
+        assert_eq!(esc2.lattice_order, MAX_ORDER);
+    }
+
+    #[test]
     fn submit_protocol() {
-        let ok = submit(b"physicoin-test", &GENESIS_DIFFICULTY, 2000).expect("submit");
-        assert!(verify_protocol(b"physicoin-test", &ok, &GENESIS_DIFFICULTY));
-        let future = Difficulty { lattice_order: 12, max_score: 10 };
+        let ok = submit::<6>(b"physicoin-test", &GENESIS_DIFFICULTY, 2000).expect("submit");
+        assert!(verify_protocol::<6>(b"physicoin-test", &ok, &GENESIS_DIFFICULTY));
+        let future = Difficulty { lattice_order: 13, max_score: 10 };
         assert_eq!(
-            submit(b"physicoin-test", &future, 8),
-            Err(SubmitError::UnsupportedLatticeOrder(12))
+            submit::<6>(b"physicoin-test", &future, 8),
+            Err(SubmitError::UnsupportedLatticeOrder(13))
         );
         let impossible = Difficulty { lattice_order: 6, max_score: 0 };
         assert_eq!(
-            submit(b"physicoin-test", &impossible, 4),
+            submit::<6>(b"physicoin-test", &impossible, 4),
             Err(SubmitError::BudgetExhausted)
         );
     }
