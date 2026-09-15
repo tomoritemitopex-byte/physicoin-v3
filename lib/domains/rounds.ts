@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { DomainError } from "./users";
-import { mineProof, verifyProof } from "@/lib/proof";
+import { mineProof } from "@/lib/proof";
+import { verifyLocal, mineLocal } from "@/lib/proof-engine";
 
 // Round mining: everyone grinds nonstop, ONE winner per round.
 // Lowest score wins the round; ties go to the earliest submission.
@@ -162,7 +163,16 @@ export async function grindAndSubmit(user_id: string) {
   // Random salt per attempt: every grind is new work, never a reprint.
   const salt = randomBytes(8).toString("hex");
   const challenge = `v3-round:${n}:${user_id}:${salt}`;
-  const proof = await mineProof(challenge, threshold, ROUND_NONCES, order);
+  // Fast path: Rust binary when it runs here; pure-TS grind otherwise
+  // (e.g. serverless hosts where native binaries can't execute).
+  let proof: { nonce: number; score: number; grid_hex: string };
+  try {
+    proof = await mineProof(challenge, threshold, ROUND_NONCES, order);
+  } catch {
+    const local = mineLocal(challenge, threshold, ROUND_NONCES, order);
+    if (!local) throw new DomainError("PROOF_BUDGET_EXHAUSTED", "Nonce budget ran out.", 422);
+    proof = local;
+  }
   return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score, salt);
 }
 
@@ -184,8 +194,8 @@ export async function recordProof(
   const [r] = await sql`SELECT lattice_order, difficulty FROM physi_rounds WHERE number = ${round} LIMIT 1`;
   const order = r?.lattice_order ?? GENESIS_ORDER;
   const threshold = r?.difficulty ?? GENESIS_THRESHOLD;
-  const expectLen = order * order * 2 * 2; // grid bytes (2*N*N) as hex chars
-  if (grid_hex.length !== expectLen) {
+  // Nibble form (2*N*N chars, current) or legacy byte-pair (4*N*N).
+  if (grid_hex.length !== 2 * order * order && grid_hex.length !== 4 * order * order) {
     throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
   }
   // Accept both challenge shapes: prefixed (v3-round:…) and bare
@@ -196,10 +206,13 @@ export async function recordProof(
     `v3-round:${round}:${user_id}${salted}`,
     `${round}:${user_id}${salted}`,
   ];
+  // Pure-TS verification: no binary needed, identical math (see proof-engine.ts).
   let ok = false;
   for (const c of candidates) {
-    ok = await verifyProof(c, threshold, nonce, grid_hex, order).catch(() => false);
-    if (ok) break;
+    if (verifyLocal(c, threshold, nonce, grid_hex, order)) {
+      ok = true;
+      break;
+    }
   }
   if (!ok) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
   if (score > threshold) {

@@ -4,24 +4,16 @@
 //! Exit 0 on success/OK, 2 on FAIL-or-error. Never prints a fake proof.
 use physi_proof::{mine_parallel, verify, Grid, MAX_ORDER};
 
-fn hex_encode(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{:02x}", x)).collect()
+/// Grid transport: ONE hex char per cell (values are always < 16).
+/// A 6x6 grid is 72 chars; order N is 2*N*N chars.
+fn hex_encode_cells(b: &[u8]) -> String {
+    b.iter().map(|x| char::from_digit(*x as u32, 16).unwrap_or('?')).collect()
 }
 
-fn hex_decode(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
-        return None;
-    }
-    let bytes = s.as_bytes();
-    let val = |c: u8| match c {
-        b'0'..=b'9' => Some(c - b'0'),
-        b'a'..=b'f' => Some(c - b'a' + 10),
-        b'A'..=b'F' => Some(c - b'A' + 10),
-        _ => None,
-    };
-    let mut out = Vec::with_capacity(s.len() / 2);
-    for i in (0..bytes.len()).step_by(2) {
-        out.push((val(bytes[i])? << 4) | val(bytes[i + 1])?);
+fn hex_decode_cells(s: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(s.len());
+    for c in s.chars() {
+        out.push(c.to_digit(16)? as u8);
     }
     Some(out)
 }
@@ -50,7 +42,7 @@ fn run_mine<const N: usize>(challenge: &[u8], max_score: u32, max_nonces: u64) {
                 "{{\"nonce\":{},\"score\":{},\"grid_hex\":\"{}\"}}",
                 p.nonce,
                 p.score,
-                hex_encode(&p.grid.to_bytes())
+                hex_encode_cells(&p.grid.to_bytes())
             );
         }
         None => {
@@ -61,12 +53,31 @@ fn run_mine<const N: usize>(challenge: &[u8], max_score: u32, max_nonces: u64) {
 }
 
 fn run_verify<const N: usize>(challenge: &[u8], max_score: u32, nonce: u64, grid_hex: &str) {
-    let raw = hex_decode(grid_hex).unwrap_or_else(|| usage());
-    if raw.len() != 2 * N * N {
+    // Accept nibble form (2*N*N chars, current) and legacy byte-pair
+    // form (4*N*N chars, first release binaries).
+    let cells: Vec<u8> = if grid_hex.len() == 4 * N * N {
+        let mut v = Vec::with_capacity(2 * N * N);
+        let b = grid_hex.as_bytes();
+        for i in (0..b.len()).step_by(2) {
+            let hi = (b[i] as char).to_digit(16);
+            let lo = (b[i + 1] as char).to_digit(16);
+            match (hi, lo) {
+                (Some(h), Some(l)) => v.push((h * 16 + l) as u8),
+                _ => {
+                    eprintln!("BAD_GRID_HEX");
+                    std::process::exit(2);
+                }
+            }
+        }
+        v
+    } else {
+        hex_decode_cells(grid_hex).unwrap_or_else(|| usage())
+    };
+    if cells.len() != 2 * N * N {
         eprintln!("BAD_GRID_HEX");
         std::process::exit(2);
     }
-    match Grid::<N>::from_bytes(&raw) {
+    match Grid::<N>::from_bytes(&cells) {
         Some(grid) => {
             let proof = physi_proof::Proof::<N> { nonce, grid, score: physi_proof::score(&grid) };
             if verify::<N>(challenge, &proof, max_score) {
