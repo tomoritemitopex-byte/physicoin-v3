@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { getDb } from "@/lib/db";
 import { DomainError } from "./users";
 import { mineProof, verifyProof } from "@/lib/proof";
@@ -104,7 +104,7 @@ export async function currentRound() {
   };
 }
 
-/** Website miners: the server grinds ONE proof for you and submits it. */
+/** Website miners: the server grinds ONE fresh proof for you and submits it. */
 export async function grindAndSubmit(user_id: string) {
   const sql = getDb();
   const u = await sql`SELECT id FROM physi_users WHERE id = ${user_id} LIMIT 1`;
@@ -112,9 +112,11 @@ export async function grindAndSubmit(user_id: string) {
   await settle();
   const n = roundNumberAt(Date.now());
   await ensureRound(n);
-  const challenge = `v3-round:${n}:${user_id}`;
+  // Random salt per attempt: every grind is new work, never a reprint.
+  const salt = randomBytes(8).toString("hex");
+  const challenge = `v3-round:${n}:${user_id}:${salt}`;
   const proof = await mineProof(challenge, ROUND_DIFFICULTY, ROUND_NONCES);
-  return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score);
+  return recordProof(user_id, n, proof.nonce, proof.grid_hex, proof.score, salt);
 }
 
 /** Separate machines: submit an externally mined proof (verified here). */
@@ -123,7 +125,8 @@ export async function recordProof(
   round: number,
   nonce: number,
   grid_hex: string,
-  score: number
+  score: number,
+  salt = ""
 ) {
   const sql = getDb();
   const u = await sql`SELECT id FROM physi_users WHERE id = ${user_id} LIMIT 1`;
@@ -131,7 +134,7 @@ export async function recordProof(
   await settle();
   const current = roundNumberAt(Date.now());
   if (round !== current) throw new DomainError("ROUND_CLOSED", "That round already closed.", 409);
-  const challenge = `v3-round:${round}:${user_id}`;
+  const challenge = salt ? `v3-round:${round}:${user_id}:${salt}` : `v3-round:${round}:${user_id}`;
   const ok = await verifyProof(challenge, 155, nonce, grid_hex).catch(() => false);
   if (!ok) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
   if (score > ROUND_DIFFICULTY) {
@@ -140,8 +143,8 @@ export async function recordProof(
   const gridBytes = Buffer.from(grid_hex, "hex");
   try {
     await sql`
-      INSERT INTO physi_round_proofs (round_number, user_id, nonce, score, grid)
-      VALUES (${round}, ${user_id}, ${nonce}, ${score}, ${gridBytes})`;
+      INSERT INTO physi_round_proofs (round_number, user_id, nonce, score, grid, salt)
+      VALUES (${round}, ${user_id}, ${nonce}, ${score}, ${gridBytes}, ${salt})`;
   } catch (e) {
     if (String((e as Error)?.message || "").includes("duplicate")) {
       throw new DomainError("DUPLICATE_PROOF", "That proof is already in.", 409);
