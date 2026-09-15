@@ -5,7 +5,15 @@ export default function MiningPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [round, setRound] = useState<any>(null);
+  const [wins, setWins] = useState<any[]>([]);
+
+  async function loadRound() {
+    try {
+      const r = await fetch("/api/mining?round=current").then((x) => x.json());
+      if (r.ok) setRound(r);
+    } catch {}
+  }
 
   useEffect(() => {
     try {
@@ -15,19 +23,22 @@ export default function MiningPage() {
       if (id) {
         fetch(`/api/mining?user_id=${encodeURIComponent(id)}`)
           .then((r) => r.json())
-          .then((j) => j.ok && setLogs(j.logs))
+          .then((j) => j.ok && setWins(j.wins))
           .catch(() => {});
       }
     } catch {}
+    loadRound();
+    const iv = setInterval(loadRound, 15000);
+    return () => clearInterval(iv);
   }, []);
 
-  async function checkIn() {
+  async function grind() {
     if (!uid) {
       setMsg("Create a handle on Profile first.");
       return;
     }
     setBusy(true);
-    setMsg("Grinding puzzle proof…");
+    setMsg("Grinding proof for this round…");
     try {
       const r = await fetch("/api/mining", {
         method: "POST",
@@ -36,10 +47,10 @@ export default function MiningPage() {
       });
       const j = await r.json();
       if (j.ok) {
-        setMsg(`+${j.earned} $PHY · proof nonce ${j.proof.nonce}, score ${j.proof.score}`);
-        setLogs([{ earned_amount: j.earned, proof_nonce: j.proof.nonce, proof_score: j.proof.score, created_at: new Date().toISOString() }, ...logs]);
+        setMsg(`Submitted! Round ${j.round} leader score: ${j.leader ? j.leader.score : "—"}.`);
+        loadRound();
       } else {
-        setMsg(j.message || "Check-in failed.");
+        setMsg(j.message || "Grind failed.");
       }
     } catch {
       setMsg("Network error.");
@@ -51,22 +62,33 @@ export default function MiningPage() {
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
       <h1 className="text-xl font-black">Mining</h1>
-      <p className="mt-1 text-sm text-ink/70">Daily check-in. Each claim grinds a fresh puzzle proof.</p>
+      <p className="mt-1 text-sm text-ink/70">
+        One winner every 10 minutes. Lowest grid score takes the round and its coin.
+      </p>
+      {round && (
+        <div className="mt-3 rounded-2xl border border-sky/30 bg-white p-4 font-mono text-xs">
+          <p>
+            Round {round.round} · closes in {Math.floor(round.ends_in_secs / 60)}m {round.ends_in_secs % 60}s
+          </p>
+          <p>Reward {round.reward} $PHY · Leader score {round.leader ? round.leader.score : "— none yet —"}</p>
+        </div>
+      )}
       <button
-        onClick={checkIn}
+        onClick={grind}
         disabled={busy}
         className="mt-4 w-full rounded-full bg-forest px-4 py-3 font-bold text-white disabled:opacity-50"
       >
-        {busy ? "Mining…" : "Check in +$PHY"}
+        {busy ? "Grinding…" : "Mine this round"}
       </button>
       {msg && <p className="mt-2 font-mono text-xs text-ink/70">{msg}</p>}
       <div className="mt-6 space-y-2">
-        {logs.map((l, i) => (
+        <p className="font-mono text-[11px] uppercase text-ink/50">Your round wins</p>
+        {wins.map((w, i) => (
           <div key={i} className="rounded-xl border border-sky/20 bg-white p-3 font-mono text-xs">
-            +{l.earned_amount} · nonce {l.proof_nonce} · score {l.proof_score} ·{" "}
-            {String(l.created_at).slice(0, 10)}
+            Round {w.round} · score {w.score} · +{w.reward}
           </div>
         ))}
+        {wins.length === 0 && <p className="text-sm text-ink/50">No wins yet — grind above.</p>}
       </div>
     </div>
   );

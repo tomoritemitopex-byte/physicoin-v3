@@ -36,14 +36,14 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
         return;
       }
       localStorage.setItem("physi_profile", JSON.stringify(c.user));
-      setMsg("Mining your first coin — grinding proof…");
+      setMsg("Entering you in the current mining round…");
       const m = await fetch("/api/mining", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ user_id: c.user.id }),
       }).then((r) => r.json());
       if (m.ok) {
-        setMsg(`Welcome, @${c.user.nickname} — first coin mined (proof nonce ${m.proof.nonce}).`);
+        setMsg(`Welcome, @${c.user.nickname} — your first proof is in round ${m.round}. Lowest score wins the coin.`);
         setDone(true);
       } else {
         setMsg(m.message || "Mining failed.");
@@ -58,7 +58,7 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
   return (
     <main className="mx-auto max-w-md px-6 py-16 text-center">
       <p className="font-mono text-xs uppercase tracking-widest text-accent">Join the node</p>
-      <h1 className="mt-3 text-3xl font-black">Mine your first coin free.</h1>
+      <h1 className="mt-3 text-3xl font-black">Race for the next coin.</h1>
       {inviter && <p className="mt-2 text-sm text-ink/60">Invited by @{inviter} (no strings attached)</p>}
       <p className="mt-3 text-sm text-ink/70">
         Pick a handle, tap once, and the node grinds a real puzzle proof for your first $PHY. Contributing
