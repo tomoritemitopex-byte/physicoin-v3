@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sky: #7dd3fc;
+  --accent: #0369a1;
+  --ink: #0c1e3a;
+  --brick: #dc2626;
+  --forest: #15803d;
+}
+
+body {
+  background: #f0f9ff;
+  color: var(--ink);
+}
