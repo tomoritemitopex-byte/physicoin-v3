@@ -32,13 +32,19 @@ export async function send(input: {
   if (Number(from[0]?.b || 0) < amount) {
     throw new DomainError("INSUFFICIENT_COINS", "Not enough $PHY in this wallet.", 409);
   }
+  // Sink: 2% of every send is burned (min 0.01). Deflation pays for flow.
+  const fee = Math.max(0.01, Math.round(amount * 0.02 * 100) / 100);
+  if (amount <= fee) {
+    throw new DomainError("DUST", "Amount must exceed the 2% burn fee.", 400);
+  }
+  const net = Math.round((amount - fee) * 100) / 100;
   await sql`UPDATE physi_users SET mining_balance = mining_balance - ${amount} WHERE id = ${input.from_user_id}`;
-  await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${amount}) WHERE id = ${input.to_user_id}`;
+  await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${net}) WHERE id = ${input.to_user_id}`;
   const [t] = await sql`
     INSERT INTO physi_transfers (from_user, to_user, amount, memo)
-    VALUES (${input.from_user_id}, ${input.to_user_id}, ${amount}, ${String(input.memo || "").slice(0, 140)})
+    VALUES (${input.from_user_id}, ${input.to_user_id}, ${net}, ${String(input.memo || "").slice(0, 140)})
     RETURNING id, amount, created_at`;
-  return { transfer: t };
+  return { transfer: t, fee, gross: amount };
 }
 
 export async function history(user_id: string, limit = 20) {

@@ -28,7 +28,7 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
       const c = await fetch("/api/profile", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ full_name: nickname, nickname, programme: "PHYS", level: "100L" }),
+        body: JSON.stringify({ full_name: nickname, nickname, programme: "PHYS", level: "100L", invited_by: ref || null }),
       }).then((r) => r.json());
       if (!c.ok) {
         setMsg(c.message || "Handle failed — try another.");

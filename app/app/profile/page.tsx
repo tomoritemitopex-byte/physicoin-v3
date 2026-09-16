@@ -34,6 +34,7 @@ export default function ProfilePage() {
         const p = JSON.parse(raw);
         setMe(p);
         refresh(p.id);
+        loadHistory(p.id);
       }
     } catch {}
   }, []);
@@ -67,6 +68,14 @@ export default function ProfilePage() {
   const [to, setTo] = useState("");
   const [amount, setAmount] = useState("");
   const [sendMsg, setSendMsg] = useState("");
+  const [history, setHistory] = useState<any[]>([]);
+
+  async function loadHistory(id: string) {
+    try {
+      const r = await fetch(`/api/wallet/send?user_id=${encodeURIComponent(id)}`).then((x) => x.json());
+      if (r.ok) setHistory(r.transfers.slice(0, 10));
+    } catch {}
+  }
 
   async function sendCoins() {
     setSendMsg("Sending…");
@@ -191,6 +200,17 @@ export default function ProfilePage() {
               </button>
             </div>
             {sendMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{sendMsg}</p>}
+            <p className="mt-1 font-mono text-[10px] text-ink/40">Sends burn 2% (min 0.01) — flow pays for scarcity.</p>
+            {history.length > 0 && (
+              <div className="mt-3 border-t border-sky/20 pt-2">
+                <p className="font-mono text-[10px] uppercase text-ink/40">Recent moves</p>
+                {history.map((h) => (
+                  <p key={h.id} className="mt-1 font-mono text-[11px] text-ink/60">
+                    {h.from_user === me.id ? `sent ${h.amount}` : `got ${h.amount}`} · {String(h.created_at).slice(5, 16).replace("T", " ")}
+                  </p>
+                ))}
+              </div>
+            )}
             <button
               onClick={() => {
                 const link = `${window.location.origin}/join?ref=${me.id}`;

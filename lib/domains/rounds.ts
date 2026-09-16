@@ -118,6 +118,13 @@ export async function closeRound(n: number) {
   }
   const w = best[0];
   await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${ROUND_REWARD}) WHERE id = ${w.user_id}`;
+  // Invite reward: first win pays the inviter 0.5, once ever.
+  const inv = await sql<{ by: string | null; paid: boolean }[]>`
+    SELECT invited_by AS by, invite_rewarded AS paid FROM physi_users WHERE id = ${w.user_id} LIMIT 1`;
+  if (inv[0]?.by && !inv[0].paid) {
+    await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + 0.5) WHERE id = ${inv[0].by}`;
+    await sql`UPDATE physi_users SET invite_rewarded = true WHERE id = ${w.user_id}`;
+  }
   const grid = await sql<{ grid: Buffer }[]>`
     SELECT grid FROM physi_round_proofs
     WHERE round_number = ${n} AND user_id = ${w.user_id} AND nonce = ${w.nonce} LIMIT 1`;

@@ -40,6 +40,7 @@ export async function createUser(input: {
   nickname: string;
   programme: string;
   level: string;
+  invited_by?: string | null;
 }): Promise<User> {
   const nickname = String(input.nickname || "").trim().toLowerCase();
   if (!validHandle(nickname)) {
@@ -49,10 +50,14 @@ export async function createUser(input: {
     throw new DomainError("MISSING_FIELDS", "full_name, programme and level are required.");
   }
   const sql = getDb();
+  if (input.invited_by) {
+    const ref = await sql`SELECT id FROM physi_users WHERE id = ${input.invited_by} LIMIT 1`;
+    if (!ref[0]) throw new DomainError("BAD_REF", "Inviter not found — joining without referral.", 404);
+  }
   try {
     const [u] = await sql<User[]>`
-      INSERT INTO physi_users (full_name, nickname, programme, level)
-      VALUES (${input.full_name}, ${nickname}, ${input.programme}, ${input.level})
+      INSERT INTO physi_users (full_name, nickname, programme, level, invited_by)
+      VALUES (${input.full_name}, ${nickname}, ${input.programme}, ${input.level}, ${input.invited_by || null})
       RETURNING id, full_name, nickname, programme, level,
         authority_base, authority_final, mining_balance`;
     return u;
