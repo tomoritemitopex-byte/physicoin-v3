@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     const u = new URL(req.url);
     const limit = Number(u.searchParams.get("limit")) || 20;
     const round = u.searchParams.get("round");
-    if (round) {
+    if (round && !isNaN(Number(round))) {
       const n = Number(round);
       const sql = (await import("@/lib/db")).getDb();
       const [r] = await sql`SELECT number, status, winning_score, winning_ticket, prev_hash, tx_root, tx_count, lattice_order, difficulty FROM physi_rounds WHERE number = ${n} LIMIT 1`;
