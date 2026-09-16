@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { postEvent, listEvents } from "@/lib/domains/events";
 import { toErrorResponse } from "@/lib/errors";
+import { actor, cap } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const res = await postEvent(body);
+    const uid = await actor(req, body, "created_by");
+    const res = await postEvent({
+      ...body,
+      title: cap(body.title, 200),
+      venue: cap(body.venue, 200),
+      created_by: body.created_by || uid,
+    });
     if ("duplicate" in res) {
       return NextResponse.json({ ok: true, duplicate: true, existing: res.existing }, { status: 200 });
     }

@@ -11,16 +11,21 @@ export async function thread(user_id: string, peer_id: string, token: string) {
   if (me !== user_id) throw new DomainError("NOT_YOURS", "This session cannot read that inbox.", 403);
   if (!peer_id || peer_id === user_id) throw new DomainError("BAD_PEER", "A conversation needs someone else.");
   const sql = getDb();
-  const peer = await sql`SELECT id FROM physi_users WHERE id = ${peer_id} LIMIT 1`;
+  // UUIDs compare as UUIDs only (same guard as sendDM).
+  const looksUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(peer_id);
+  const peer = looksUuid
+    ? await sql`SELECT id FROM physi_users WHERE id = ${peer_id} LIMIT 1`
+    : await sql`SELECT id FROM physi_users WHERE lower(nickname) = ${peer_id.toLowerCase()} LIMIT 1`;
   if (!peer[0]) throw new DomainError("UNKNOWN_PEER", "Wallet not found.", 404);
+  const peerId = peer[0].id as string;
   await sql`UPDATE physi_direct_messages SET read_at = NOW()
-    WHERE to_user = ${user_id} AND from_user = ${peer_id} AND read_at IS NULL`;
+    WHERE to_user = ${user_id} AND from_user = ${peerId} AND read_at IS NULL`;
   return await sql`
     SELECT id, from_user, to_user, body, created_at,
-      (read_at IS NOT NULL) AS read
+      (read_at IS NOT NULL) AS is_read
     FROM physi_direct_messages
-    WHERE (from_user = ${user_id} AND to_user = ${peer_id})
-       OR (from_user = ${peer_id} AND to_user = ${user_id})
+    WHERE (from_user = ${user_id} AND to_user = ${peerId})
+       OR (from_user = ${peerId} AND to_user = ${user_id})
     ORDER BY created_at ASC LIMIT 100`;
 }
 

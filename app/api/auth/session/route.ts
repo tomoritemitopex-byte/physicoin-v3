@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { issueSession, validateSession } from "@/lib/domains/auth";
+import { issueSession, validateSession, enroll } from "@/lib/domains/auth";
 import { toErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,11 @@ export async function POST(req: Request) {
     if (!body.user_id) {
       return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "user_id is required." }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, ...(await issueSession(body.user_id)) }, { status: 201 });
+    // Enroll (one-time, only while no password exists) or log in.
+    if (body.enroll === true) {
+      return NextResponse.json({ ok: true, enrolled: true, ...(await enroll(body.user_id, body.password || "")) }, { status: 201 });
+    }
+    return NextResponse.json({ ok: true, ...(await issueSession(body.user_id, body.password || "")) }, { status: 201 });
   } catch (e) {
     return toErrorResponse(e);
   }

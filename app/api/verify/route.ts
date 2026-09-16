@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { castVote, getTally } from "@/lib/domains/votes";
 import { toErrorResponse } from "@/lib/errors";
+import { actor } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { tally } = await castVote(body);
+    const uid = await actor(req, body, "verifier_id");
+    const { tally } = await castVote({ ...body, verifier_id: body.verifier_id || uid });
     return NextResponse.json({ ok: true, ...tally });
   } catch (e) {
     return toErrorResponse(e);

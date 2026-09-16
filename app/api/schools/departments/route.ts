@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createDepartment, listDepartments } from "@/lib/domains/schools";
 import { toErrorResponse } from "@/lib/errors";
+import { actor, cap } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    return NextResponse.json({ ok: true, department: await createDepartment(await req.json()) }, { status: 201 });
+    const body = await req.json();
+    const uid = await actor(req, body, "created_by");
+    return NextResponse.json({ ok: true, department: await createDepartment({ ...body, name: cap(body.name, 200), created_by: body.created_by || uid }) }, { status: 201 });
   } catch (e) {
     return toErrorResponse(e);
   }

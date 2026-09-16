@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ping, heat } from "@/lib/domains/squad";
 import { toErrorResponse } from "@/lib/errors";
+import { actor } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    return NextResponse.json({ ok: true, ping: await ping(await req.json()) }, { status: 201 });
+    const body = await req.json();
+    const uid = await actor(req, body, "user_id");
+    return NextResponse.json({ ok: true, ping: await ping({ ...body, user_id: body.user_id || uid }) }, { status: 201 });
   } catch (e) {
     return toErrorResponse(e);
   }

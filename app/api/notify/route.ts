@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
+import { anySession } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 // Outgoing notifications. Delivers to Telegram only when the server is
 // configured for it; otherwise says so honestly instead of pretending.
+// Requires a live session (any wallet) so strangers can't spam the channel.
 export async function POST(req: Request) {
   try {
+    await anySession(req);
     const body = await req.json().catch(() => ({} as any));
     const event = body.event;
     if (!event?.title) {

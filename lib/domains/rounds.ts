@@ -17,12 +17,13 @@ import {
 import { buildChallenge, candidateChallenges } from "@/lib/proof-challenge";
 import { validateSession } from "./auth";
 
-// Round mining: everyone grinds nonstop, ONE winner per round.
-// Lowest score wins the round; ties go to the earliest submission.
-// Rounds target ROUND_SECS; a near-flawless proof (score <= 2) closes
-// the round immediately. Difficulty retargets every round (mirrors the
-// Rust engine's retarget()): fast rounds tighten, slow rounds ease off,
-// and a flawless round grows the grid (lattice escalation, max 12).
+// Round mining: unlimited attempts, ONE lottery winner per round.
+// Eligibility (score <= bar) only buys a ticket; the lowest ticket wins.
+// Ties go to the earliest submission. Rounds target ROUND_SECS.
+// Difficulty retargets every round by volume (mirrors the Rust engine's
+// retarget()): busy rounds tighten, empty rounds ease off (capped so
+// eligibility always costs real grinding), and a flawless winning score
+// grows the grid (lattice escalation, max 12).
 
 export const ROUND_SECS = 120;
 export const ROUND_REWARD = 1;
@@ -266,34 +267,37 @@ export async function recordProof(
   const [r] = await sql`SELECT lattice_order, difficulty FROM physi_rounds WHERE number = ${round} LIMIT 1`;
   const order = r?.lattice_order ?? GENESIS_ORDER;
   const bar = Math.min(r?.difficulty ?? GENESIS_THRESHOLD, barCap(order));
-  // Nibble form (2*N*N chars, current) or legacy byte-pair (4*N*N).
-  if (grid_hex.length !== 2 * order * order && grid_hex.length !== 4 * order * order) {
-    throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
+  if (!/^[\x20-\x7e]{0,64}$/.test(salt)) {
+    throw new DomainError("BAD_SALT", "Salt must be printable ASCII, max 64 chars.", 400);
   }
+  // Canonical form first: legacy byte-pair grids become nibble grids.
+  // Everything downstream (compare, score, store) uses the canonical
+  // form, so both formats verify AND store identically (36 bytes at o6).
+  const parsed = gridFromHex(grid_hex.toLowerCase(), order);
+  if (!parsed) throw new DomainError("BAD_PROOF", `Grid is not order ${order}.`, 422);
+  const canon = gridToHex(parsed);
   // v1 verify, both challenge shapes (see proof-challenge.ts — single spec):
-  // format + eligibility + climb moat + ticket recompute.
+  // eligibility on the RECOMPUTED score (claimed score is shown the door),
+  // climb moat (grid must derive from its nonce), ticket recompute.
   let ticket: string | null = null;
-  for (const c of candidateChallenges({ round, userId: user_id, salt })) {
-    const g = gridFromHex(grid_hex.toLowerCase(), order);
-    if (!g) break;
-    if (scoreGrid(g) > bar) break;
-    const derived = derive(c, nonce, order);
-    if (gridToHex(derived) !== grid_hex.toLowerCase()) continue;
-    ticket = await ticketHex(c, nonce, g);
-    break;
+  const realScore = scoreGrid(parsed);
+  if (realScore <= bar) {
+    for (const c of candidateChallenges({ round, userId: user_id, salt })) {
+      const derived = derive(c, nonce, order);
+      if (gridToHex(derived) !== canon) continue;
+      ticket = await ticketHex(c, nonce, parsed);
+      break;
+    }
   }
   if (!ticket) throw new DomainError("BAD_PROOF", "Proof does not verify.", 422);
-  if (score > bar) {
-    throw new DomainError("TOO_WEAK", `Score ${score} misses the round bar (${bar}).`, 422);
-  }
   if (ticket_hex && ticket_hex.toLowerCase() !== ticket) {
     throw new DomainError("BAD_PROOF", "Ticket does not match recomputation.", 422);
   }
-  const gridBytes = Buffer.from(gridFromHex(grid_hex.toLowerCase(), order) ? grid_hex.padEnd(grid_hex.length + (grid_hex.length % 2), "0") : "", "hex");
+  const gridBytes = Buffer.from(gridHexToBytes(canon, order));
   try {
     await sql`
       INSERT INTO physi_round_proofs (round_number, user_id, nonce, score, grid, salt, ticket_hex, version)
-      VALUES (${round}, ${user_id}, ${nonce}, ${score}, ${gridBytes}, ${salt}, ${ticket}, ${version})`;
+      VALUES (${round}, ${user_id}, ${nonce}, ${realScore}, ${gridBytes}, ${salt}, ${ticket}, ${version})`;
   } catch (e) {
     if (String((e as Error)?.message || "").includes("duplicate")) {
       throw new DomainError("DUPLICATE_PROOF", "That proof is already in.", 409);

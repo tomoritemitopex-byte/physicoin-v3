@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { repeatSchedule } from "@/lib/domains/misc";
 import { toErrorResponse } from "@/lib/errors";
+import { actor } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    if (!body.user_id) {
+    const uid = await actor(req, body, "user_id");
+    if (!body.user_id || body.user_id !== uid) {
       return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "user_id is required." }, { status: 400 });
     }
     return NextResponse.json({ ok: true, ...(await repeatSchedule(body.user_id, body.scope_value)) }, { status: 201 });

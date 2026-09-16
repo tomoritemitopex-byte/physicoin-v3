@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { drop, feed } from "@/lib/domains/notes";
 import { toErrorResponse } from "@/lib/errors";
+import { actorOptional, cap } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    return NextResponse.json({ ok: true, note: await drop(await req.json()) }, { status: 201 });
+    const body = await req.json();
+    await actorOptional(req, body, "uploader_id");
+    return NextResponse.json({ ok: true, note: await drop({ ...body, title: cap(body.title, 200) }) }, { status: 201 });
   } catch (e) {
     return toErrorResponse(e);
   }

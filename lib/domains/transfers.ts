@@ -38,12 +38,19 @@ export async function send(input: {
     throw new DomainError("DUST", "Amount must exceed the 2% burn fee.", 400);
   }
   const net = Math.round((amount - fee) * 100) / 100;
-  await sql`UPDATE physi_users SET mining_balance = mining_balance - ${amount} WHERE id = ${input.from_user_id}`;
-  await sql`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${net}) WHERE id = ${input.to_user_id}`;
+  // Atomic: debit + credit + ledger land together or not at all.
+  // (Double-spend race closed: concurrent sends serialize on the row.)
+  await sql.begin(async (tx: any) => {
+    await tx`UPDATE physi_users SET mining_balance = mining_balance - ${amount} WHERE id = ${input.from_user_id}`;
+    await tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${net}) WHERE id = ${input.to_user_id}`;
+    await tx`
+      INSERT INTO physi_transfers (from_user, to_user, amount, memo)
+      VALUES (${input.from_user_id}, ${input.to_user_id}, ${net}, ${String(input.memo || "").slice(0, 140)})`;
+  });
   const [t] = await sql`
-    INSERT INTO physi_transfers (from_user, to_user, amount, memo)
-    VALUES (${input.from_user_id}, ${input.to_user_id}, ${net}, ${String(input.memo || "").slice(0, 140)})
-    RETURNING id, amount, created_at`;
+    SELECT id, amount, created_at FROM physi_transfers
+    WHERE from_user = ${input.from_user_id} AND to_user = ${input.to_user_id}
+    ORDER BY created_at DESC LIMIT 1`;
   return { transfer: t, fee, gross: amount };
 }
 
