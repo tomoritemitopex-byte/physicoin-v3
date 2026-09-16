@@ -40,19 +40,15 @@ export default function MiningPage() {
     setBusy(true);
     setMsg("Grinding proof for this round…");
     try {
-      const sess = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ user_id: uid }),
-      }).then((r) => r.json());
-      if (!sess.ok) {
-        setMsg("Could not authorize wallet.");
+      const sess = localStorage.getItem("physi_session") || "";
+      if (!sess) {
+        setMsg("Locked — unlock your wallet on Profile first.");
         setBusy(false);
         return;
       }
       const r = await fetch("/api/mining", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${sess.token}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${sess}` },
         body: JSON.stringify({ user_id: uid }),
       });
       const j = await r.json();

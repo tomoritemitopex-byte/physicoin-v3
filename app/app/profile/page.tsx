@@ -69,6 +69,52 @@ export default function ProfilePage() {
   const [amount, setAmount] = useState("");
   const [sendMsg, setSendMsg] = useState("");
   const [history, setHistory] = useState<any[]>([]);
+  const [password, setPassword] = useState("");
+  const [loginMsg, setLoginMsg] = useState("");
+
+  async function login() {
+    if (!me || !password) return;
+    setLoginMsg("Signing in…");
+    try {
+      const r = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: me.id, password }),
+      }).then((x) => x.json());
+      if (r.ok && r.token) {
+        localStorage.setItem("physi_session", r.token);
+        setLoginMsg("Signed in — wallet unlocked.");
+        setPassword("");
+      } else if (r.code === "NOT_ENROLLED") {
+        setLoginMsg("No password yet — set one below to lock this wallet.");
+      } else {
+        setLoginMsg(r.message || "Sign-in failed.");
+      }
+    } catch {
+      setLoginMsg("Network error.");
+    }
+  }
+
+  async function enrollPw() {
+    if (!me || !password) return;
+    setLoginMsg("Locking wallet…");
+    try {
+      const r = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: me.id, password, enroll: true }),
+      }).then((x) => x.json());
+      if (r.ok && r.token) {
+        localStorage.setItem("physi_session", r.token);
+        setLoginMsg("Locked — only this password opens the wallet now.");
+        setPassword("");
+      } else {
+        setLoginMsg(r.message || "Failed.");
+      }
+    } catch {
+      setLoginMsg("Network error.");
+    }
+  }
 
   async function loadHistory(id: string) {
     try {
@@ -91,18 +137,14 @@ export default function ProfilePage() {
         setSendMsg("Recipient not found — check the handle.");
         return;
       }
-      const sess = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ user_id: myId }),
-      }).then((r) => r.json());
-      if (!sess.ok) {
-        setSendMsg("Could not authorize wallet.");
+      const sess = localStorage.getItem("physi_session") || "";
+      if (!sess) {
+        setSendMsg("Locked — unlock your wallet above first.");
         return;
       }
       const r = await fetch("/api/wallet/send", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${sess.token}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${sess}` },
         body: JSON.stringify({ from_user_id: myId, to_user_id: target.user.id, amount: Number(amount) }),
       });
       const j = await r.json();
@@ -177,6 +219,26 @@ export default function ProfilePage() {
             <button onClick={signOut} className="mt-2 text-xs text-brick">
               Sign out
             </button>
+          </div>
+          <div className="rounded-2xl border border-sky/30 bg-white p-4">
+            <p className="font-mono text-[11px] uppercase text-ink/50">Wallet lock</p>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="password (8+ chars)"
+                type="password"
+                className="flex-1 rounded-lg border border-sky/30 px-3 py-2 text-sm"
+              />
+              <button onClick={login} className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">
+                Unlock
+              </button>
+              <button onClick={enrollPw} className="rounded-full border border-sky/30 px-4 py-2 text-sm font-bold">
+                Lock
+              </button>
+            </div>
+            <p className="mt-1 font-mono text-[10px] text-ink/40">Lock sets the password once, forever. Unlock opens the session.</p>
+            {loginMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{loginMsg}</p>}
           </div>
           <div className="rounded-2xl border border-sky/30 bg-white p-4">
             <p className="font-mono text-[11px] uppercase text-ink/50">Wallet</p>

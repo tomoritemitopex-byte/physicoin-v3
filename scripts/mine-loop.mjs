@@ -21,6 +21,7 @@ function env(name, fallback) {
 const WALLET = env("OWNER_WALLET_ID", "");
 const SERVER = (env("SERVER_URL", "http://localhost:3100") || "").replace(/\/$/, "");
 const PAUSE_MS = Number(env("MINER_PAUSE_MS", "2000") || 2000);
+const WALLET_PASSWORD = env("WALLET_PASSWORD", "");
 
 if (!WALLET) {
   console.error("[miner] OWNER_WALLET_ID not set — refusing to run blind");
@@ -34,7 +35,7 @@ async function session() {
   const r = await fetch(`${SERVER}/api/auth/session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ user_id: WALLET }),
+    body: JSON.stringify({ user_id: WALLET, password: WALLET_PASSWORD || undefined }),
   });
   const j = await r.json();
   if (!j.ok || !j.token) throw new Error("session failed: " + (j.message || r.status));

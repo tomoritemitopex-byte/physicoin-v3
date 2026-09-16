@@ -9,12 +9,7 @@ export default function MessagesPage({ searchParams }: { searchParams?: { with?:
   const [note, setNote] = useState("");
 
   async function authed(userId: string) {
-    const s = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ user_id: userId }),
-    }).then((r) => r.json());
-    return s.ok ? (s.token as string) : "";
+    return localStorage.getItem("physi_session") || "";
   }
 
   async function load() {

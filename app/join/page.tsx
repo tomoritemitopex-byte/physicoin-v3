@@ -9,6 +9,7 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
   const ref = searchParams?.ref || "";
   const [inviter, setInviter] = useState<string | null>(null);
   const [nickname, setNickname] = useState("");
+  const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -35,18 +36,24 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
         setBusy(false);
         return;
       }
-      localStorage.setItem("physi_profile", JSON.stringify(c.user));
-      setMsg("Entering you in the current mining round…");
-      const sess = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ user_id: c.user.id }),
-      }).then((r) => r.json());
-      if (!sess.ok) {
-        setMsg("Wallet created, but the round entry failed. Open Mining and tap once.");
+      if (!password || password.length < 8) {
+        setMsg("Pick a password (8+ chars) to lock the wallet.");
         setBusy(false);
         return;
       }
+      localStorage.setItem("physi_profile", JSON.stringify(c.user));
+      const sess = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: c.user.id, password, enroll: true }),
+      }).then((r) => r.json());
+      if (!sess.ok || !sess.token) {
+        setMsg(sess.message || "Wallet created — lock it on Profile, then mine.");
+        setBusy(false);
+        return;
+      }
+      localStorage.setItem("physi_session", sess.token);
+      setMsg("Entering you in the current mining round…");
       const m = await fetch("/api/mining", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${sess.token}` },
@@ -80,6 +87,13 @@ export default function JoinPage({ searchParams }: { searchParams?: { ref?: stri
             value={nickname}
             onChange={(e) => setNickname(e.target.value.toLowerCase())}
             placeholder="your handle e.g. sam_07"
+            className="w-full rounded-xl border border-sky/30 bg-white px-4 py-3 text-center"
+          />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="password (8+ chars, locks the wallet)"
+            type="password"
             className="w-full rounded-xl border border-sky/30 bg-white px-4 py-3 text-center"
           />
           <button
