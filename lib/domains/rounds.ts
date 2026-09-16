@@ -314,6 +314,39 @@ export async function roundWins(user_id: string, limit = 20) {
     WHERE winner_user_id = ${user_id} ORDER BY number DESC LIMIT ${Math.min(limit, 50)}`;
 }
 
+export async function miningDashboard(user_id: string) {
+  const sql = getDb();
+  const users = await sql<{ mining_balance: string; display_name: string | null }[]>`
+    SELECT mining_balance::text, display_name FROM physi_users WHERE id = ${user_id} LIMIT 1`;
+  if (!users[0]) throw new DomainError("UNKNOWN_USER", "User not found.", 404);
+  const receipts = await sql`
+    SELECT round_number AS round, earned_amount AS reward, proof_score AS score, proof_nonce AS nonce, created_at
+    FROM physi_mining_logs WHERE user_id = ${user_id}
+    ORDER BY created_at DESC LIMIT 12`;
+  const [stats] = await sql`
+    SELECT
+      COUNT(*)::int AS accepted_proofs,
+      COALESCE(SUM(earned_amount), 0)::text AS total_rewards,
+      COALESCE(MIN(proof_score), 0)::int AS best_score
+    FROM physi_mining_logs
+    WHERE user_id = ${user_id}`;
+  const [wins] = await sql`
+    SELECT COUNT(*)::int AS rounds_won
+    FROM physi_rounds
+    WHERE winner_user_id = ${user_id} AND status = 'closed'`;
+  return {
+    balance: users[0].mining_balance,
+    display_name: users[0].display_name,
+    receipts,
+    stats: {
+      accepted_proofs: stats?.accepted_proofs ?? 0,
+      total_rewards: stats?.total_rewards ?? "0",
+      best_score: stats?.best_score ?? 0,
+      rounds_won: wins?.rounds_won ?? 0,
+    },
+  };
+}
+
 export async function recentRounds(limit = 20) {  const sql = getDb();
   const rows = await sql<
     { number: number; status: string; winning_score: number | null; reward: string; winner: string | null }[]
