@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import { grindAndSubmit, recordProof, roundWins, currentRound, miningDashboard } from "@/lib/domains/rounds";
-=======
-import { grindAndSubmit, recordProof, roundWins, currentRound } from "@/lib/domains/rounds";
->>>>>>> 85343c671415b94b636db7e7ddbbf294763d2d56
 import { toErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
