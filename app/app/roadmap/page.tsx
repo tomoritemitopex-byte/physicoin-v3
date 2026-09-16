@@ -15,7 +15,12 @@ export default async function RoadmapPage() {
   }
   return (
     <div className="mx-auto max-w-[1280px] px-4 pb-10">
-      <h1 className="py-4 text-xl font-black">Campus Road</h1>
+      <div className="flex flex-wrap items-end justify-between gap-2 py-5">
+        <div>
+          <h1 className="font-display text-3xl font-black tracking-tight">Campus Road</h1>
+          <p className="mt-1 text-[15px] text-ink/60">Tap a building, pick your level, check the notices.</p>
+        </div>
+      </div>
       <div className="relative min-h-[120vh] overflow-hidden rounded-3xl bg-gradient-to-b from-sky to-green-50 px-2">
         <RoadStatic />
         <RoadClient events={events} />

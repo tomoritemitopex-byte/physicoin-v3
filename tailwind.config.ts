@@ -9,6 +9,11 @@ export default {
         ink: "#0c1e3a",
         brick: "#dc2626",
         forest: "#15803d",
+        paper: "#fffdf7",
+      },
+      fontFamily: {
+        display: ["var(--font-display)", "Georgia", "serif"],
+        ui: ["var(--font-ui)", "system-ui", "sans-serif"],
       },
     },
   },

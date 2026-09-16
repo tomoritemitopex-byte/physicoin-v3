@@ -112,7 +112,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
-      <h1 className="text-xl font-black">Profile</h1>
+      <h1 className="font-display text-3xl font-black tracking-tight">Profile</h1>
       {!me ? (
         <div className="mt-4 space-y-2 rounded-2xl border border-sky/30 bg-white p-4">
           <input

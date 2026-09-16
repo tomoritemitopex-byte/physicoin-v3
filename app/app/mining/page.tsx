@@ -71,7 +71,7 @@ export default function MiningPage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
-      <h1 className="text-xl font-black">Mining</h1>
+      <h1 className="font-display text-3xl font-black tracking-tight">Mining</h1>
       <p className="mt-1 text-sm text-ink/70">
         Lottery rounds: any grid under the bar qualifies, lowest ticket wins the coin.
       </p>

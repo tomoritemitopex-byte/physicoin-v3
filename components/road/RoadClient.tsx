@@ -247,14 +247,14 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
           </div>
         )}
         {feed.map((ev) => (
-          <div key={ev.id} className="rounded-2xl border border-sky/20 bg-white p-4 shadow-sm">
-            <p className="font-mono text-[11px] text-ink/60">
+          <div key={ev.id} className="slip p-4 pt-5">
+            <p className="tnum font-mono text-[11px] text-ink/60">
               {String(ev.event_time).slice(0, 5)} · {String(ev.event_date).slice(0, 10)}
             </p>
-            <p className="font-bold">{ev.venue}</p>
+            <p className="font-display mt-0.5 text-lg font-semibold leading-snug">{ev.venue}</p>
             <p className="text-sm text-ink/80">{ev.title}</p>
-            <p className="mt-1 font-mono text-[10px] text-ink/50">
-              {ev.status === "verified" ? "✓ verified" : "· pending"} · {ev.scope_type}
+            <p className="mt-1.5 font-mono text-[10px] text-ink/50">
+              {ev.status === "verified" ? "✓ confirmed" : "· waiting on votes"} · {ev.scope_type}
               {ev.scope_value ? ` · ${ev.scope_value}` : ""}
             </p>
             <VoteButtons id={ev.id} title={ev.title} />

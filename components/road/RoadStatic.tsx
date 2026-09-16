@@ -22,7 +22,7 @@ export default function RoadStatic() {
       >
         <path d={d} fill="none" stroke="#0c1e3a" strokeWidth={18} strokeLinecap="round" strokeLinejoin="round" />
         <path d={d} fill="none" stroke="#ffffff" strokeWidth={21} strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-        <path d={d} fill="none" stroke="#0369a1" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+        <path d={d} className="road-draw" fill="none" stroke="#0369a1" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
       </svg>
       <div className="clock-tower" style={{ left: "50%", top: "44%", position: "absolute", zIndex: 5 }}>
         <div className="tower-icon" role="img" aria-label="MBBS clock tower">

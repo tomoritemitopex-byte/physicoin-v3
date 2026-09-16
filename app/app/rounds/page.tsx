@@ -14,7 +14,7 @@ export default async function RoundsPage() {
   }
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24">
-      <h1 className="text-xl font-black">Round history</h1>
+      <h1 className="font-display text-3xl font-black tracking-tight">Round history</h1>
       <p className="mt-1 font-mono text-[11px] text-ink/50">
         Every round, every winner. Lowest grid takes the coin.
       </p>
