@@ -323,7 +323,28 @@ export async function miningDashboard(user_id: string) {
     SELECT round_number AS round, earned_amount AS reward, proof_score AS score, proof_nonce AS nonce, created_at
     FROM physi_mining_logs WHERE user_id = ${user_id}
     ORDER BY created_at DESC LIMIT 12`;
-  return { balance: users[0].mining_balance, display_name: users[0].display_name, receipts };
+  const [stats] = await sql`
+    SELECT
+      COUNT(*)::int AS accepted_proofs,
+      COALESCE(SUM(earned_amount), 0)::text AS total_rewards,
+      COALESCE(MIN(proof_score), 0)::int AS best_score
+    FROM physi_mining_logs
+    WHERE user_id = ${user_id}`;
+  const [wins] = await sql`
+    SELECT COUNT(*)::int AS rounds_won
+    FROM physi_rounds
+    WHERE winner_user_id = ${user_id} AND status = 'closed'`;
+  return {
+    balance: users[0].mining_balance,
+    display_name: users[0].display_name,
+    receipts,
+    stats: {
+      accepted_proofs: stats?.accepted_proofs ?? 0,
+      total_rewards: stats?.total_rewards ?? "0",
+      best_score: stats?.best_score ?? 0,
+      rounds_won: wins?.rounds_won ?? 0,
+    },
+  };
 }
 
 export async function recentRounds(limit = 20) {  const sql = getDb();

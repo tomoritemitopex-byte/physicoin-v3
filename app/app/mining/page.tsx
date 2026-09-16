@@ -20,12 +20,21 @@ type Receipt = {
   created_at: string;
 };
 
+type MiningStats = {
+  accepted_proofs: number;
+  total_rewards: string;
+  best_score: number;
+  rounds_won: number;
+};
+
 export default function MiningPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [session, setSession] = useState("");
   const [round, setRound] = useState<Round | null>(null);
   const [balance, setBalance] = useState("0");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [stats, setStats] = useState<MiningStats>({ accepted_proofs: 0, total_rewards: "0", best_score: 0, rounds_won: 0 });
+  const [secondsLeft, setSecondsLeft] = useState(0);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,9 +51,11 @@ export default function MiningPage() {
       const dashboard = await dashboardResponse.json();
       if (!roundResponse.ok || !current.ok) throw new Error("The active round is unavailable.");
       setRound(current);
+      setSecondsLeft(current.ends_in_secs ?? 0);
       if (dashboard.ok && dashboard.balance !== undefined) {
         setBalance(dashboard.balance);
         setReceipts(dashboard.receipts ?? []);
+        setStats(dashboard.stats ?? { accepted_proofs: 0, total_rewards: "0", best_score: 0, rounds_won: 0 });
       }
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not sync the mining dashboard.");
@@ -78,6 +89,19 @@ export default function MiningPage() {
   }, [load]);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsLeft((value) => {
+        if (value <= 1) {
+          if (uid) load(uid).catch(() => undefined);
+          return 0;
+        }
+        return value - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [load, uid]);
+
+  useEffect(() => {
     if (!uid) return;
     const interval = setInterval(() => load(uid).catch(() => undefined), 15000);
     return () => clearInterval(interval);
@@ -107,8 +131,8 @@ export default function MiningPage() {
     }
   }
 
-  const minutes = round ? Math.floor(round.ends_in_secs / 60) : 0;
-  const seconds = round ? String(round.ends_in_secs % 60).padStart(2, "0") : "00";
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = String(secondsLeft % 60).padStart(2, "0");
   const eligibility = round ? Math.min(100, Math.round((round.difficulty / 80) * 100)) : 0;
   const canMine = Boolean(uid && session && round && !busy);
 
@@ -140,6 +164,12 @@ export default function MiningPage() {
             <Stat label="Reward" value={`${round?.reward ?? 1} $PHY`} />
             <Stat label="Grid" value={`${round?.lattice_order ?? "-"} × ${round?.lattice_order ?? "-"}`} />
             <Stat label="Leader score" value={round?.leader ? String(round.leader.score) : "—"} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Accepted proofs" value={String(stats.accepted_proofs)} />
+            <Stat label="Total earned" value={`${Number(stats.total_rewards).toFixed(2)} $PHY`} />
+            <Stat label="Best score" value={stats.best_score ? String(stats.best_score) : "—"} />
+            <Stat label="Rounds won" value={String(stats.rounds_won)} />
           </div>
           <div className="rounded-xl border border-sky/30 bg-sky-deep/40 p-4">
             <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-wider text-ink/60">
@@ -188,6 +218,7 @@ export default function MiningPage() {
           {receipts.map((receipt, index) => (
             <div key={`${receipt.created_at}-${index}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky/20 bg-white/70 px-4 py-3 text-sm">
               <span className="font-mono text-xs text-ink/60">{receipt.round ? `Round ${receipt.round}` : "Daily claim"} · nonce {receipt.nonce}</span>
+              <span className="font-mono text-xs text-ink/50">{new Date(receipt.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
               <span className="font-mono text-xs">score {receipt.score}</span>
               <strong className="text-forest">+{receipt.reward} $PHY</strong>
             </div>

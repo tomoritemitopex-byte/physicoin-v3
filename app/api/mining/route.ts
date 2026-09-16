@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { grindAndSubmit, recordProof, roundWins, currentRound, miningDashboard } from "@/lib/domains/rounds";
+import { grindAndSubmit, recordProof, currentRound, miningDashboard } from "@/lib/domains/rounds";
 import { toErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +11,13 @@ export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
     const user_id = u.searchParams.get("user_id") || "";
-    if (u.searchParams.get("round") === "current" || !user_id) {
+    if (u.searchParams.get("round") === "current") {
       return NextResponse.json({ ok: true, ...(await currentRound()) });
     }
-    return NextResponse.json({ ok: true, wins: await roundWins(user_id) });
+    if (user_id) {
+      return NextResponse.json({ ok: true, ...(await miningDashboard(user_id)) });
+    }
+    return NextResponse.json({ ok: true, ...(await currentRound()) });
   } catch (e) {
     return toErrorResponse(e);
   }
