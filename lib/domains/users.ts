@@ -95,3 +95,36 @@ export async function walletRank(id: string): Promise<{ rank: number; total: num
       (SELECT count(*)::text FROM physi_users) AS total`;
   return { rank: Number(rows[0]?.rank || 0), total: Number(rows[0]?.total || 0) };
 }
+
+export type InviteStats = {
+  invite_count: number;
+  rewarded_count: number;
+  earned: string;
+  invites: { id: string; nickname: string; created_at: string; rewarded: boolean }[];
+};
+
+/** Invite ledger: how many you brought, how many paid, and 0.5 per first win. */
+export async function getInviteStats(userId: string): Promise<InviteStats> {
+  const sql = getDb();
+  try {
+    const [c] = await sql<{ c: string }[]>`SELECT count(*)::text AS c FROM physi_users WHERE invited_by = ${userId}`;
+    const [r] = await sql<{ c: string }[]>`SELECT count(*)::text AS c FROM physi_users WHERE invited_by = ${userId} AND invite_rewarded = true`;
+    const invite_count = Number(c?.c || 0);
+    const rewarded_count = Number(r?.c || 0);
+    const earned = (rewarded_count * 0.5).toFixed(2);
+    let invites: InviteStats["invites"] = [];
+    try {
+      const rows = await sql<{ id: string; nickname: string; created_at: string; rewarded: boolean }[]>`
+        SELECT id, nickname, created_at::text, invite_rewarded AS rewarded
+        FROM physi_users WHERE invited_by = ${userId}
+        ORDER BY created_at DESC LIMIT 12`;
+      invites = rows.map((x) => ({ id: x.id, nickname: x.nickname, created_at: String(x.created_at).slice(0, 10), rewarded: !!x.rewarded }));
+    } catch {
+      invites = [];
+    }
+    return { invite_count, rewarded_count, earned, invites };
+  } catch {
+    // Columns missing on stale DB (migration 009 not yet applied) — gracefully degrade.
+    return { invite_count: 0, rewarded_count: 0, earned: "0.00", invites: [] };
+  }
+}

@@ -9,11 +9,21 @@ type Profile = {
   mining_balance: string;
 };
 
+type InviteStats = {
+  invite_count: number;
+  rewarded_count: number;
+  earned: string;
+  invites: { id: string; nickname: string; created_at: string; rewarded: boolean }[];
+};
+
 export default function ProfilePage() {
   const [me, setMe] = useState<Profile | null>(null);
   const [genesis, setGenesis] = useState(false);
   const [form, setForm] = useState({ full_name: "", nickname: "", programme: "PHYS", level: "100L" });
   const [msg, setMsg] = useState("");
+
+  const [invites, setInvites] = useState<InviteStats | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function refresh(id: string) {
     try {
@@ -22,6 +32,7 @@ export default function ProfilePage() {
       if (j.ok) {
         setMe(j.user);
         setGenesis(j.rank === 1);
+        if (j.invites) setInvites(j.invites);
         localStorage.setItem("physi_profile", JSON.stringify(j.user));
       }
     } catch {}
@@ -164,6 +175,19 @@ export default function ProfilePage() {
     }
   }
 
+  const inviteLink = me ? (typeof window !== "undefined" ? `${window.location.origin}/join?ref=${me.id}` : `/join?ref=${me.id}`) : "";
+
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setSendMsg("Invite link copied — anyone opening it credits you on their first win.");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setSendMsg(inviteLink);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
       <h1 className="font-display text-3xl font-black tracking-tight">Profile</h1>
@@ -276,20 +300,69 @@ export default function ProfilePage() {
                 ))}
               </div>
             )}
-            <button
-              onClick={() => {
-                const link = `${window.location.origin}/join?ref=${me.id}`;
-                navigator.clipboard?.writeText(link).catch(() => {});
-                setSendMsg("Invite link copied — anyone opening it can mine.");
-              }}
-              className="mt-2 text-sm font-bold text-accent"
-            >
-              Copy my invite link
-            </button>
-            <a href="/app/roadmap" className="mt-2 block text-sm font-bold text-accent">
+            <a href="/app/roadmap" className="mt-3 block text-sm font-bold text-accent">
               Vote on the Road →
             </a>
           </div>
+
+          {/* Invite rewards — slip + Fraunces */}
+          <div className="slip rounded-2xl border border-sky/20 bg-white p-5 pt-6">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Invite · 0.5 $PHY on their first win</p>
+            <h2 className="font-display mt-1 text-xl font-black tracking-tight">Grow the node</h2>
+            <p className="mt-1 text-sm leading-relaxed text-ink/60">
+              Share your link. When someone you invited wins their first round, you get 0.5 $PHY — once per invitee, no cost to them.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <input
+                readOnly
+                value={inviteLink}
+                onFocus={(e) => e.target.select()}
+                className="flex-1 rounded-xl border border-sky/30 bg-paper px-3 py-2.5 font-mono text-xs text-ink/80"
+              />
+              <button
+                onClick={copyInvite}
+                className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-bold text-white transition ${copied ? "bg-forest" : "bg-accent hover:bg-accent/90"}`}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="mt-1 font-mono text-[10px] text-ink/40">Anyone opening the link joins with your id as invited_by.</p>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-sky/20 bg-paper px-3 py-3 text-center">
+                <p className="font-display text-xl font-black">{invites?.invite_count ?? "—"}</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/50">Invited</p>
+              </div>
+              <div className="rounded-xl border border-sky/20 bg-paper px-3 py-3 text-center">
+                <p className="font-display text-xl font-black">{invites?.rewarded_count ?? "—"}</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/50">Rewarded</p>
+              </div>
+              <div className="rounded-xl border border-forest/20 bg-forest/10 px-3 py-3 text-center">
+                <p className="font-display text-xl font-black text-forest">+{invites ? Number(invites.earned).toFixed(2) : "0.00"}</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/50">$PHY earned</p>
+              </div>
+            </div>
+
+            {invites && invites.invites.length > 0 ? (
+              <div className="mt-4 border-t border-sky/20 pt-3">
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Recent invites</p>
+                <div className="mt-2 space-y-1">
+                  {invites.invites.map((iv) => (
+                    <div key={iv.id} className="flex items-center justify-between rounded-lg bg-paper px-3 py-2 font-mono text-xs">
+                      <span className="font-bold text-ink">@{iv.nickname}</span>
+                      <span className="text-ink/50">{iv.created_at}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${iv.rewarded ? "bg-forest text-white" : "bg-sky/20 text-ink/60"}`}>
+                        {iv.rewarded ? "+0.5 paid" : "pending"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 font-mono text-[11px] text-ink/40">No invites yet — copy the link and bring the cohort.</p>
+            )}
+          </div>
+
           {msg && <p className="font-mono text-[11px] text-ink/60">{msg}</p>}
         </div>
       )}

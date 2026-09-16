@@ -115,6 +115,14 @@ export async function closeRound(n: number) {
     const prevHash = prevRound[0]?.t || "GENESIS";
     await sql`UPDATE physi_rounds SET status = 'closed', closed_at = NOW(),
       prev_hash = ${prevHash}, tx_root = 'GENESIS', tx_count = 0 WHERE number = ${n}`;
+    // Even empty blocks consume pending swap hints — they were included as hints for this block.
+    try {
+      const pendingSwaps = await sql<{ id: string }[]>`SELECT id FROM physi_pending_swaps WHERE status='pending' ORDER BY created_at ASC LIMIT 12`;
+      if (pendingSwaps.length > 0) {
+        const ids = pendingSwaps.map((p) => p.id);
+        await sql`UPDATE physi_pending_swaps SET status='consumed', consumed_at=NOW(), consumed_round=${n} WHERE id IN (SELECT unnest(${ids}::uuid[]))`;
+      }
+    } catch {}
     await ensureRound(n + 1, nextOrder, nextThreshold);
     return { round: n, winner: null as string | null, next: { order: nextOrder, threshold: nextThreshold } };
   }
@@ -174,8 +182,22 @@ export async function closeRound(n: number) {
       VALUES (${n}, ${order}, ${grid[0]?.grid}, ${w.score}, ${w.ticket}, ${prevHash}, ${w.user_id}, ${n})
       ON CONFLICT (version) DO NOTHING`;
   } catch {}
+  // Pending swap hints: honest, not instant. Consume them into this block
+  // so POST /api/schedule hints are included in the next mined grid's block.
+  // They do not move cells directly — they are queued and then marked
+  // consumed when the block closes (the grid itself remains the winner's).
+  let consumedSwaps = 0;
+  let consumedSwapIds: string[] = [];
+  try {
+    const pendingSwaps = await sql<{ id: string }[]>`SELECT id FROM physi_pending_swaps WHERE status='pending' ORDER BY created_at ASC LIMIT 12`;
+    if (pendingSwaps.length > 0) {
+      consumedSwaps = pendingSwaps.length;
+      consumedSwapIds = pendingSwaps.map((p) => p.id);
+      await sql`UPDATE physi_pending_swaps SET status='consumed', consumed_at=NOW(), consumed_round=${n} WHERE id IN (SELECT unnest(${consumedSwapIds}::uuid[]))`;
+    }
+  } catch {}
   await ensureRound(n + 1, nextOrder, nextThreshold);
-  return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, tx_root: txRoot, tx_count: txCount, next: { order: nextOrder, threshold: nextThreshold } };
+  return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, tx_root: txRoot, tx_count: txCount, consumed_swaps: consumedSwaps, consumed_swap_ids: consumedSwapIds, next: { order: nextOrder, threshold: nextThreshold } };
 }
 
 /** Close every finished round before doing anything else. */
