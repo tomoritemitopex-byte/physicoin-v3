@@ -118,7 +118,10 @@ export default function ProfilePage() {
 
   async function loadHistory(id: string) {
     try {
-      const r = await fetch(`/api/wallet/send?user_id=${encodeURIComponent(id)}`).then((x) => x.json());
+      const sess = localStorage.getItem("physi_session") || "";
+      const r = await fetch(`/api/wallet/send?user_id=${encodeURIComponent(id)}`, {
+        headers: sess ? { authorization: `Bearer ${sess}` } : {},
+      }).then((x) => x.json());
       if (r.ok) setHistory(r.transfers.slice(0, 10));
     } catch {}
   }
