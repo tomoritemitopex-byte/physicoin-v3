@@ -15,8 +15,8 @@ export default async function RoundsPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24">
       <h1 className="font-display text-3xl font-black tracking-tight">Round history</h1>
-      <p className="mt-1 font-mono text-[11px] text-ink/50">
-        Every round, every winner. Lowest grid takes the coin.
+      <p className="mt-1 text-sm text-ink/60">
+        Every block locks timetable slips. Mining mints the timetable — chain, grid, and txs together.
       </p>
       {leaders.length > 0 && (
         <div className="mt-4 rounded-2xl border border-accent/30 bg-white p-4">
@@ -35,12 +35,16 @@ export default async function RoundsPage() {
       )}
       <div className="mt-4 space-y-2">
         {rounds.map((r) => (
-          <div key={r.number} className="flex items-center justify-between rounded-xl border border-sky/20 bg-white p-3 font-mono text-xs">
+          <a
+            key={r.number}
+            href={`/api/rounds?round=${r.number}`}
+            className="flex items-center justify-between rounded-xl border border-sky/20 bg-white p-3 font-mono text-xs hover:border-accent/40"
+          >
             <span className="font-black">#{r.number}</span>
-            <span>{r.status === "closed" ? (r.winner ? `@${r.winner}` : "no contest") : "open…"}</span>
+            <span>{r.status === "closed" ? (r.winner ? `@${r.winner}` : "empty") : "open…"}</span>
             <span>{r.winning_score !== null ? `score ${r.winning_score}` : "—"}</span>
             <span>+{r.reward}</span>
-          </div>
+          </a>
         ))}
         {rounds.length === 0 && <p className="text-sm text-ink/50">No rounds yet.</p>}
       </div>

@@ -112,8 +112,9 @@ export async function closeRound(n: number) {
   if (!best[0]) {
     const prevRound = await sql<{ t: string | null }[]>`
       SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${n - 1} LIMIT 1`;
+    const prevHash = prevRound[0]?.t || "GENESIS";
     await sql`UPDATE physi_rounds SET status = 'closed', closed_at = NOW(),
-      prev_hash = ${prevRound[0]?.t || "GENESIS"} WHERE number = ${n}`;
+      prev_hash = ${prevHash}, tx_root = 'GENESIS', tx_count = 0 WHERE number = ${n}`;
     await ensureRound(n + 1, nextOrder, nextThreshold);
     return { round: n, winner: null as string | null, next: { order: nextOrder, threshold: nextThreshold } };
   }
@@ -146,6 +147,26 @@ export async function closeRound(n: number) {
   await sql`UPDATE physi_rounds SET status = 'closed', winner_user_id = ${w.user_id},
     winning_score = ${w.score}, winning_nonce = ${w.nonce}, winning_ticket = ${w.ticket},
     prev_hash = ${prevHash}, closed_at = NOW() WHERE number = ${n}`;
+  // Mempool → block: lock pending timetable slips into this block.
+  // No slips = empty block (still chained, still valid). No destruction.
+  let txRoot = "GENESIS";
+  let txCount = 0;
+  try {
+    const pending = await sql<{ id: string }[]>`
+      SELECT id FROM physi_events WHERE status = 'pending' ORDER BY created_at ASC LIMIT 12`;
+    if (pending.length > 0) {
+      txCount = pending.length;
+      const ids = pending.map((p) => p.id).sort().join(",");
+      txRoot = createHash("sha256").update(ids).digest("hex");
+      for (const p of pending) {
+        try {
+          await sql`INSERT INTO physi_block_txs (round_number, event_id) VALUES (${n}, ${p.id}) ON CONFLICT DO NOTHING`;
+        } catch {}
+      }
+      await sql`UPDATE physi_events SET status = 'verified' WHERE id IN (SELECT unnest(${pending.map((p) => p.id)}::uuid[]))`;
+    }
+    await sql`UPDATE physi_rounds SET tx_root = ${txRoot}, tx_count = ${txCount} WHERE number = ${n}`;
+  } catch {}
   // Latin-infused timetable: winner grid becomes next schedule version.
   try {
     await sql`
@@ -154,7 +175,7 @@ export async function closeRound(n: number) {
       ON CONFLICT (version) DO NOTHING`;
   } catch {}
   await ensureRound(n + 1, nextOrder, nextThreshold);
-  return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, next: { order: nextOrder, threshold: nextThreshold } };
+  return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, tx_root: txRoot, tx_count: txCount, next: { order: nextOrder, threshold: nextThreshold } };
 }
 
 /** Close every finished round before doing anything else. */
