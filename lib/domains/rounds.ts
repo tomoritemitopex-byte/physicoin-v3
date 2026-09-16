@@ -146,6 +146,13 @@ export async function closeRound(n: number) {
   await sql`UPDATE physi_rounds SET status = 'closed', winner_user_id = ${w.user_id},
     winning_score = ${w.score}, winning_nonce = ${w.nonce}, winning_ticket = ${w.ticket},
     prev_hash = ${prevHash}, closed_at = NOW() WHERE number = ${n}`;
+  // Latin-infused timetable: winner grid becomes next schedule version.
+  try {
+    await sql`
+      INSERT INTO physi_schedule_versions (version, lattice_order, grid, score, ticket_hex, prev_hash, winner_user_id, round_number)
+      VALUES (${n}, ${order}, ${grid[0]?.grid}, ${w.score}, ${w.ticket}, ${prevHash}, ${w.user_id}, ${n})
+      ON CONFLICT (version) DO NOTHING`;
+  } catch {}
   await ensureRound(n + 1, nextOrder, nextThreshold);
   return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, next: { order: nextOrder, threshold: nextThreshold } };
 }
