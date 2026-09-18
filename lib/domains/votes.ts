@@ -66,6 +66,11 @@ export async function castVote(input: {
       const { settle } = await import("@/lib/domains/futures");
       await settle(input.event_id);
     } catch {}
+    // Ghost Pods: auto-invite YES verifiers (up to 7) to a 24h anonymous pod
+    try {
+      const { createPodForEvent } = await import("@/lib/domains/pods");
+      await createPodForEvent(input.event_id);
+    } catch {}
   }
   return { tally: { yes, no, required, promoted } };
 }
