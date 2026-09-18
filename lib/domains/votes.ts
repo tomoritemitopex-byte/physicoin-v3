@@ -61,6 +61,11 @@ export async function castVote(input: {
       INSERT INTO physi_canonical_log (event_id, yes_weight, total_weight, yes_ratio, promoted_by)
       VALUES (${input.event_id}, ${yes}, ${total}, ${total ? yes / total : 0}, ${input.verifier_id})`;
     promoted = true;
+    // Timetable Futures: settle open stakes when quorum is reached (additive, no drops)
+    try {
+      const { settle } = await import("@/lib/domains/futures");
+      await settle(input.event_id);
+    } catch {}
   }
   return { tally: { yes, no, required, promoted } };
 }
