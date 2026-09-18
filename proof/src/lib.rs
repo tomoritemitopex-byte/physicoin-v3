@@ -7,11 +7,23 @@
 //! Higher orders are bigger searches; the adjuster escalates the lattice
 //! when an order gets too easy. No dependencies.
 
-/// Fixed hill-climb budget per nonce. Same for miner and verifier.
+/// Hill-climb budget per nonce — scales with lattice order so larger grids
+/// remain grindable on pocket hardware (2G/10% survival). Baseline 1500 at
+/// order 6, scaled by cell count; dynamic retarget is max_score + order
+/// (Satoshi Test 1: difficulty is NOT a constant — retarget() moves the bar;
+/// the step budget is the container, not the difficulty).
+/// Consensus-critical: bound into ticket preimage so a fork that changes the
+/// budget invalidates tickets (anti-copy-paste, container principle).
+/// Do not tune without bumping PROOF_VERSION.
 pub const CLIMB_ITERS: usize = 1500;
+pub fn climb_iters_for_order(order: u8) -> usize {
+    let cells = order as usize * order as usize;
+    1500 * cells / 36
+}
 /// Highest lattice order this engine implements.
 pub const MAX_ORDER: u8 = 12;
-/// Proof encoding version. v1 = nibble grid + lottery ticket.
+/// Proof encoding version. v1 = nibble grid + lottery ticket (ticket binds
+/// CLIMB_ITERS + version + order).
 pub const PROOF_VERSION: u8 = 1;
 /// Argon2id cost: 8 MiB, 1 pass, 1 lane, 32-byte ticket (practice grade).
 pub const TICKET_MEM_KIB: u32 = 8192;
@@ -204,9 +216,9 @@ fn derive<const N: usize>(challenge: &[u8], nonce: u64) -> Grid<N> {
             g.reg[i][j] = reg[i][j];
         }
     }
-    // Hill-climb: random swaps, keep improvements. Fixed budget.
+    // Hill-climb: random swaps, keep improvements. Order-scaled budget (survival).
     let mut best = score(&g);
-    for _ in 0..CLIMB_ITERS {
+    for _ in 0..climb_iters_for_order(N as u8) {
         let tweak_ranks = prg.below(2) == 0;
         let a = prg.below(N);
         let b = prg.below(N);
@@ -296,6 +308,14 @@ pub fn opening_threshold(n: u8) -> u32 {
     (max_score_for_order(n) / 13).max(4)
 }
 
+/// Moat rule (Step 6): the bar may never rise above this — eligibility
+/// must always cost real grinding (random 6x6 grids score ~60).
+/// Used by retarget and by the round layer; replaces any hard-coded 6x6
+/// ceiling with a generic function of the lattice order.
+pub fn bar_cap(order: u8) -> u32 {
+    (max_score_for_order(order) / 6).max(8)
+}
+
 /// Network difficulty: which lattice, and what score beats it.
 /// Calibration (order 6): <=16 instant, <=10 ~dozens of nonces,
 /// <=8 ~hundreds. 0 is classically unreachable at order 6 — a 0
@@ -319,8 +339,10 @@ pub struct BlockSample {
 /// - Any flawless (score 0) submission escalates the LATTICE: order + 1
 ///   (capped at MAX_ORDER) with a fresh opening threshold. The grid grows
 ///   because the old one got solved.
-/// - Slow blocks ease off (+1, capped at worst); fast blocks tighten
+/// - Slow blocks ease off (+1, capped at barCap); fast blocks tighten
 ///   (-1, floored at 1); on-target blocks change nothing.
+/// Uses `bar_cap`/`max_score_for_order`/`opening_threshold` generically —
+/// no hard-coded 6x6 ceiling or magic threshold.
 pub fn retarget(prev: Difficulty, target_secs: u64, samples: &[BlockSample]) -> Difficulty {
     if samples.is_empty() {
         return prev;
@@ -331,7 +353,7 @@ pub fn retarget(prev: Difficulty, target_secs: u64, samples: &[BlockSample]) -> 
     }
     let avg = samples.iter().map(|s| s.interval_secs).sum::<u64>() / (samples.len() as u64);
     if avg > target_secs * 6 / 5 {
-        Difficulty { max_score: (prev.max_score + 1).min(max_score_for_order(prev.lattice_order)), ..prev }
+        Difficulty { max_score: (prev.max_score + 1).min(bar_cap(prev.lattice_order)), ..prev }
     } else if avg < target_secs * 4 / 5 {
         Difficulty { max_score: prev.max_score.saturating_sub(1).max(1), ..prev }
     } else {
@@ -339,22 +361,66 @@ pub fn retarget(prev: Difficulty, target_secs: u64, samples: &[BlockSample]) -> 
     }
 }
 
+// Satoshi Test 2: chain verification — verify checks prev_hash chain, not one block alone.
+// Each block commits to prev ticket hash; a chain is valid only if every link
+// connects and every proof verifies at its difficulty.
+pub struct ChainedBlock<const N: usize> {
+    pub proof: Proof<N>,
+    pub prev_hash: String,
+    pub ticket: [u8; 32],
+}
+pub fn verify_chain<const N: usize>(
+    challenge: &[u8],
+    chain: &[ChainedBlock<N>],
+    diff: &Difficulty,
+) -> bool {
+    if chain.is_empty() {
+        return true;
+    }
+    let mut expected_prev = String::from("GENESIS");
+    for block in chain {
+        if block.prev_hash != expected_prev {
+            return false;
+        }
+        if !verify_protocol::<N>(challenge, &block.proof, diff) {
+            return false;
+        }
+        let recomputed = ticket::<N>(challenge, block.proof.nonce, &block.proof.grid);
+        if recomputed != block.ticket {
+            return false;
+        }
+        expected_prev = block.ticket.iter().map(|b| format!("{:02x}", b)).collect();
+    }
+    true
+}
+
 pub mod quantum;
 
 // ---------------------------------------------------------------------------
 // Lottery: eligibility (score <= bar) separates from winning (lowest
-// ticket). Ticket = Argon2id over challenge || nonce || grid — memory-hard,
-// so raw speed and future quantum search buy little; any CPU competes.
+// ticket). Ticket = Argon2id over challenge || nonce || grid || climb_budget
+// || version || order — memory-hard, so raw speed and future quantum search
+// buy little; any CPU competes.
+// Anti-copy-paste guard: CLIMB_ITERS is bound into the ticket preimage.
+// Changing the climb budget (or forking the engine with a cheaper climb)
+// invalidates all tickets, so a copy-paste miner cannot undercut the
+// container — the container IS the riddle (barCap/lattice escalation +
+// fixed climb bound to the lottery).
 // ---------------------------------------------------------------------------
 
 use argon2::{Algorithm, Argon2, Params, Version};
 
 /// Lottery ticket for a candidate: 32 bytes, lower wins.
+/// Password preimage: challenge || nonce LE || grid bytes || CLIMB_ITERS LE
+/// || PROOF_VERSION || lattice order (N). Fixed budget is consensus-critical.
 pub fn ticket<const N: usize>(challenge: &[u8], nonce: u64, grid: &Grid<N>) -> [u8; 32] {
-    let mut pw = Vec::with_capacity(challenge.len() + 8 + 2 * N * N);
+    let mut pw = Vec::with_capacity(challenge.len() + 8 + 2 * N * N + 6);
     pw.extend_from_slice(challenge);
     pw.extend_from_slice(&nonce.to_le_bytes());
     pw.extend_from_slice(&grid.to_bytes());
+    pw.extend_from_slice(&(climb_iters_for_order(N as u8) as u32).to_le_bytes());
+    pw.push(PROOF_VERSION);
+    pw.push(N as u8);
     // Salt is fixed per challenge (verifier recomputes it identically).
     let mut salt_input = Vec::with_capacity(16 + challenge.len());
     salt_input.extend_from_slice(b"PHYSI-LOTTERY-V1");

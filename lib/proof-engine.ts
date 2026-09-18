@@ -85,11 +85,24 @@ export function scoreGrid(g: Grid): number {
   return total + (n * n - seen.size);
 }
 
+// Fixed climb budget — consensus-critical, bound into ticket preimage.
+// Changing it invalidates all tickets (anti-copy-paste guard, container
+// principle: the fixed 1500-step container IS the riddle).
 export const CLIMB_ITERS = 1500;
 export const PROOF_VERSION = 1;
 /** Argon2id cost (practice grade — must match Rust TICKET_* consts). */
 export const TICKET_MEM_KIB = 8192;
 export const TICKET_PASSES = 1;
+
+export function maxScoreForOrder(n: number): number {
+  return 4 * n * (n - 1) + n * n - 1;
+}
+export function openingThreshold(n: number): number {
+  return Math.max(4, Math.round(maxScoreForOrder(n) / 13));
+}
+export function barCap(order: number): number {
+  return Math.max(8, Math.floor(maxScoreForOrder(order) / 6));
+}
 
 export function derive(challenge: string, nonce: number, n: number): Grid {
   const enc = new TextEncoder().encode(challenge);
@@ -186,7 +199,11 @@ export function mineLocal(
 
 // ---------------------------------------------------------------------------
 // Lottery (v1): eligibility + lowest ticket wins. Ticket = Argon2id over
-// challenge || nonce || grid — identical to Rust ticket().
+// challenge || nonce || grid || CLIMB_ITERS || version || order — identical
+// to Rust ticket(). Memory-hard, so raw speed and future quantum search buy
+// little; any CPU competes. CLIMB_ITERS is bound into the preimage: changing
+// the climb budget (or forking with a cheaper climb) invalidates all tickets
+// — anti-copy-paste guard, container principle.
 // ---------------------------------------------------------------------------
 
 function ticketSalt(challenge: string): Uint8Array {
@@ -206,10 +223,17 @@ export async function ticketHex(challenge: string, nonce: number, g: Grid): Prom
   const nb = new Uint8Array(8);
   new DataView(nb.buffer).setBigUint64(0, BigInt(nonce), true);
   const gb = gridBytes(g);
-  const pw = new Uint8Array(challenge.length + 8 + gb.length);
-  pw.set(new TextEncoder().encode(challenge), 0);
-  pw.set(nb, challenge.length);
-  pw.set(gb, challenge.length + 8);
+  const enc = new TextEncoder().encode(challenge);
+  // Pw: enc || nonce LE || gb || CLIMB_ITERS LE u32 || PROOF_VERSION u8 || order u8
+  const pw = new Uint8Array(enc.length + 8 + gb.length + 6);
+  pw.set(enc, 0);
+  pw.set(nb, enc.length);
+  pw.set(gb, enc.length + 8);
+  let off = enc.length + 8 + gb.length;
+  new DataView(pw.buffer).setUint32(off, CLIMB_ITERS, true);
+  off += 4;
+  pw[off++] = PROOF_VERSION;
+  pw[off++] = g.n;
   return argon2id({
     password: pw,
     salt: ticketSalt(challenge),

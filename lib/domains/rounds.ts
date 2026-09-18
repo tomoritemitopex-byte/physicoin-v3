@@ -91,16 +91,22 @@ export async function closeRound(n: number) {
   const order = info[0]?.o ?? GENESIS_ORDER;
   const bar = Math.min(info[0]?.d ?? GENESIS_THRESHOLD, barCap(order));
   const durationSecs = Math.max(0, Math.round((Date.now() - Date.parse(info[0]?.s || new Date().toISOString())) / 1000));
-  // Retarget for the NEXT round by VOLUME (lottery: luck has no skill
-  // curve, so participation — not scores — moves the bar).
+  // Retarget: BOTH volume and wall-clock time (mirrors Rust retarget()).
+  // Volume: busy rounds tighten, empty ease (lottery luck has no skill curve).
+  // Time: fast blocks tighten, slow blocks ease — durationSecs vs ROUND_SECS.
   const subs = await sql<{ c: number }[]>`
     SELECT count(*)::int AS c FROM physi_round_proofs WHERE round_number = ${n}`;
   let nextOrder = order;
   let nextThreshold = bar;
   if (subs[0].c > 40) {
-    nextThreshold = Math.max(bar - 1, 1);
+    nextThreshold = Math.max(nextThreshold - 1, 1);
   } else if (subs[0].c === 0) {
-    nextThreshold = Math.min(bar + 1, barCap(order));
+    nextThreshold = Math.min(nextThreshold + 1, barCap(order));
+  }
+  if (durationSecs > ROUND_SECS * 6 / 5) {
+    nextThreshold = Math.min(nextThreshold + 1, barCap(order));
+  } else if (durationSecs > 0 && durationSecs < ROUND_SECS * 4 / 5) {
+    nextThreshold = Math.max(nextThreshold - 1, 1);
   }
   // Lattice escalation under lottery: a flawless (score 0) winner means
   // the order fell — grow the grid (mirrors engine retarget()).
@@ -446,4 +452,29 @@ export async function leaderboard(limit = 20, includeTest = false) {
     WHERE r.status = 'closed' AND r.winner_user_id IS NOT NULL
       AND u.nickname NOT LIKE 'test\\_%' ESCAPE '\\'
     GROUP BY u.nickname ORDER BY wins DESC, earned DESC LIMIT ${n}`;
+}
+
+// Satoshi Test 2: verify checks prev_hash chain, not one block alone.
+// Walks physi_rounds in number order, ensuring each prev_hash equals
+// previous winning_ticket (GENESIS for the first). Returns first break.
+export async function verifyChain(limit = 50): Promise<{ valid: boolean; brokenAt?: number; checked: number }> {
+  const sql = getDb();
+  const rows = await sql<{ number: number; winning_ticket: string | null; prev_hash: string | null }[]>`
+    SELECT number, winning_ticket, prev_hash FROM physi_rounds
+    WHERE status='closed' ORDER BY number ASC LIMIT ${Math.min(limit, 200)}`;
+  if (rows.length === 0) return { valid: true, checked: 0 };
+  // Genesis anchor: first closed round must point at GENESIS or its predecessor.
+  let expected = "GENESIS";
+  // Find predecessor of first row to handle non-zero start
+  if (rows[0].number > 0) {
+    const prev = await sql<{ t: string | null }[]>`SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${rows[0].number - 1} LIMIT 1`;
+    expected = prev[0]?.t || "GENESIS";
+  }
+  for (const r of rows) {
+    const got = r.prev_hash || "GENESIS";
+    if (got !== expected) return { valid: false, brokenAt: r.number, checked: rows.length };
+    expected = r.winning_ticket || expected; // empty blocks keep chain via winning_ticket or GENESIS
+    if (r.winning_ticket) expected = r.winning_ticket;
+  }
+  return { valid: true, checked: rows.length };
 }
