@@ -31,6 +31,12 @@ function xpFrom(s: MiningStats): number {
   // Duo-style single XP: every entry counts, wins count more — feeds League.
   return s.accepted_proofs * 10 + s.rounds_won * 50;
 }
+function maxScoreForOrder(n: number): number {
+  return 4 * n * (n - 1) + n * n - 1;
+}
+function barCap(order: number): number {
+  return Math.max(8, Math.floor(maxScoreForOrder(order) / 6));
+}
 
 function playJuice() {
   // Sound placeholder — Duo-style pop. Replace src with /sounds/pop.mp3 when asset lands.
@@ -200,8 +206,15 @@ export default function MiningPage() {
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = String(secondsLeft % 60).padStart(2, "0");
   const xp = xpFrom(stats);
+  const level = Math.max(1, Math.floor(xp / 100) + 1);
   const canMine = Boolean(uid && session && round && !busy && submits < 25);
   const barPct = round ? Math.min(100, Math.max(6, Math.round((1 - round.difficulty / 80) * 100))) : 0;
+  // Juicy earning preview — variable by bar + XP level, no new DB (existing XP + round fields only).
+  const xpBonus = Math.min(0.5, Math.floor(xp / 100) * 0.05);
+  const streakBonus = stats.rounds_won >= 3 ? 0.15 : stats.rounds_won >= 1 ? 0.1 : 0;
+  const barBonus = round ? Math.min(0.12, Math.max(0, (barCap(round.lattice_order) - round.difficulty) * 0.02)) : 0;
+  const variableBonus = xpBonus + streakBonus + barBonus;
+  const totalPreview = (1 + variableBonus).toFixed(2);
 
   return (
     <div className="min-h-screen bg-[#fffdf7] text-ink">
@@ -290,6 +303,26 @@ export default function MiningPage() {
             </p>
             <p className="mt-1 font-mono text-[11px] leading-none text-ink/50">Chain of winners — verifiable</p>
           </div>
+        </section>
+
+        {/* Juicy earning preview — additive, no new DB: bar + XP level → variable total */}
+        <section className="mt-4 rounded-[20px] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-50 p-4 sm:p-5 shadow-sm">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-700">Earning preview · before you tap</p>
+          <p className="font-display mt-1 text-[15px] font-black leading-snug tracking-tight">
+            If you win this round: <span className="text-amber-700">+1 PHY</span> + streak × + invite bonus
+            <span className="ml-2 rounded-full bg-ink px-2.5 py-1 font-mono text-[11px] font-black text-white tabular-nums">→ {totalPreview} PHY total</span>
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5 font-mono text-[11px]">
+            <span className="rounded-full border border-ink/10 bg-white px-2.5 py-1"><span className="font-bold">+1.00</span> base</span>
+            <span className="rounded-full border border-ink/10 bg-white px-2.5 py-1"><span className="font-bold">+{xpBonus.toFixed(2)}</span> XP Lv.{level} {xpBonus > 0 ? "· " + xp + " XP" : "· tap to level"}</span>
+            <span className="rounded-full border border-ink/10 bg-white px-2.5 py-1"><span className="font-bold">+{streakBonus.toFixed(2)}</span> streak {stats.rounds_won ? `· ${stats.rounds_won} win${stats.rounds_won > 1 ? "s" : ""}` : "· win to unlock"}</span>
+            <span className="rounded-full border border-ink/10 bg-white px-2.5 py-1"><span className="font-bold">+{barBonus.toFixed(2)}</span> bar {round ? `· ${round.difficulty} bar (${barPct}% lane)` : "· syncing bar"}</span>
+            <span className="rounded-full border border-forest/20 bg-forest/10 px-2.5 py-1 font-bold text-forest">+0.50 / invite · their 1st win</span>
+          </div>
+          <p className="mt-2 font-mono text-[11px] leading-relaxed text-ink/60">
+            Variable by <span className="font-bold text-ink/80">bar</span> (harder bar +{`0.02`}/pt) + <span className="font-bold text-ink/80">XP Lv.{level}</span> — 1 PHY capped at 25 entries/round · session-gated.
+            {submits >= 25 ? " Cap hit — wait next round." : submits >= 20 ? ` ${25 - submits} taps left this round.` : ""}
+          </p>
         </section>
 
         {/* ACTION — Duo gamification: bounce + juice + XP + streak protection */}

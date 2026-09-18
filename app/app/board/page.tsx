@@ -62,6 +62,16 @@ function fmtTimeLeft(s: number): string {
   const sec = String(Math.max(0, s) % 60).padStart(2, "0");
   return `${m}:${sec}`;
 }
+function boardXp(s: { accepted_proofs: number; rounds_won: number } | null): number {
+  if (!s) return 0;
+  return s.accepted_proofs * 10 + s.rounds_won * 50;
+}
+function maxScoreForOrderBoard(n: number): number {
+  return 4 * n * (n - 1) + n * n - 1;
+}
+function barCapBoard(order: number): number {
+  return Math.max(8, Math.floor(maxScoreForOrderBoard(order) / 6));
+}
 
 export default function BoardPage() {
   // ── identity ──
@@ -96,6 +106,9 @@ export default function BoardPage() {
   // ── leaders ──
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [leadersLoading, setLeadersLoading] = useState(true);
+
+  // ── earning preview (XP from mining dash, no new DB) ──
+  const [xpStats, setXpStats] = useState<{ accepted_proofs: number; rounds_won: number; total_rewards: string } | null>(null);
 
   // identity once
   useEffect(() => {
@@ -206,6 +219,19 @@ export default function BoardPage() {
     loadRound();
     loadChain();
     loadLeaders();
+    // XP for earning preview (no new DB, existing mining dash)
+    try {
+      const raw = localStorage.getItem("physi_profile");
+      const p = raw ? JSON.parse(raw) : null;
+      if (p?.id) {
+        fetch(`/api/mining?user_id=${encodeURIComponent(p.id)}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((j) => {
+            if (j.ok && j.stats) setXpStats(j.stats);
+          })
+          .catch(() => {});
+      }
+    } catch {}
   }, [loadSlips, loadRound, loadChain, loadLeaders]);
 
   // countdown
@@ -319,6 +345,12 @@ export default function BoardPage() {
   }
 
   const barPct = round ? Math.min(100, Math.max(8, Math.round((1 - round.difficulty / 80) * 100))) : 0;
+  const xp = boardXp(xpStats);
+  const level = Math.max(1, Math.floor(xp / 100) + 1);
+  const xpBonusBoard = Math.min(0.5, Math.floor(xp / 100) * 0.05);
+  const streakBonusBoard = (xpStats?.rounds_won || 0) >= 3 ? 0.15 : (xpStats?.rounds_won || 0) >= 1 ? 0.1 : 0;
+  const barBonusBoard = round ? Math.min(0.12, Math.max(0, (barCapBoard(round.lattice_order) - round.difficulty) * 0.02)) : 0;
+  const totalPreviewBoard = (1 + xpBonusBoard + streakBonusBoard + barBonusBoard).toFixed(2);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky/30 via-[#f0fbff] to-white pb-16 text-ink">
@@ -560,6 +592,20 @@ export default function BoardPage() {
                 </div>
               </>
             ) : null}
+
+            {/* juicy earning preview — variable by bar + XP level (additive, 25cap + session respected) */}
+            <div className="mt-3 rounded-2xl border border-amber-300/30 bg-amber-50 p-3 text-ink">
+              <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-700">If you win this round: +1 PHY + streak × + invite bonus</p>
+              <p className="font-display mt-1 text-[13px] font-black leading-tight">→ {totalPreviewBoard} PHY <span className="font-mono text-[11px] font-bold text-ink/50">variable · bar {round?.difficulty ?? "—"} + XP Lv.{level}</span></p>
+              <div className="mt-1.5 flex flex-wrap gap-1 font-mono text-[10px]">
+                <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+1.00 base</span>
+                <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+{xpBonusBoard.toFixed(2)} XP</span>
+                <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+{streakBonusBoard.toFixed(2)} streak</span>
+                <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+{barBonusBoard.toFixed(2)} bar</span>
+                <span className="rounded-full border border-forest/20 bg-forest/10 px-2 py-0.5 font-bold text-forest">+0.50 / invite</span>
+              </div>
+              <p className="mt-1 font-mono text-[10px] leading-relaxed text-ink/50">25 entries max/round · session-gated — your next tap is previewed above.</p>
+            </div>
 
             {/* mine */}
             <div className="mt-auto pt-4">
