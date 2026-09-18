@@ -74,6 +74,25 @@ function barCapBoard(order: number): number {
 }
 
 const CHAIN_CACHE_KEY = "physi_chain_cache_v3";
+const HEAT_BOOST_KEY = "physi_heat_boost";
+const BUILDING_CODES = ["ANAT","PHYSIOL","BIOCHEM","MBBS","PHARM","COMM MED","NURS","BMLS"] as const;
+const BUILDING_IDS = ["anat","phys","biochem","mbbs","pharm","commed","nursing","lab"] as const;
+const BUILDING_LABEL: Record<string,string> = { anat:"ANAT", phys:"PHYSIOL", biochem:"BIOCHEM", mbbs:"MBBS", pharm:"PHARM", commed:"COMM MED", nursing:"NURS", lab:"BMLS" };
+
+function heatFromSlips(slips: Slip[]): { heat: Record<string,number>, hottest: string|null, max: number } {
+  const heat: Record<string, number> = {};
+  for (const id of BUILDING_IDS) heat[id]=0;
+  for (const s of slips) {
+    const hay = `${s.title} ${s.venue}`.toLowerCase();
+    for (let i=0;i<BUILDING_CODES.length;i++) {
+      if (hay.includes(BUILDING_CODES[i].toLowerCase())) { heat[BUILDING_IDS[i]]++; break; }
+    }
+  }
+  let max=0; let hottest: string|null=null;
+  for (const id of BUILDING_IDS) if (heat[id]>max) { max=heat[id]; hottest=id; }
+  if (max===0) hottest=null;
+  return { heat, hottest, max };
+}
 
 /* sparkline: tiny SVG + mini timeline — no DB, purely tx_counts */
 function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: boolean }) {
@@ -171,6 +190,10 @@ export default function BoardPage() {
 
   // ── earning preview (XP from mining dash, no new DB) ──
   const [xpStats, setXpStats] = useState<{ accepted_proofs: number; rounds_won: number; total_rewards: string } | null>(null);
+  // Heat Hall
+  const [boostHall, setBoostHall] = useState<string | null>(null);
+  const [heatToast, setHeatToast] = useState("");
+  const [serverHeat, setServerHeat] = useState<Record<string,number> | null>(null);
 
   // identity once
   useEffect(() => {
@@ -311,6 +334,16 @@ export default function BoardPage() {
     loadRound();
     loadChain();
     loadLeaders();
+    // Heat Hall fetch (offline-first uses slips fallback)
+    fetch("/api/halls/heat", { cache: "no-store" }).then((r)=>r.json()).then((j)=>{ if(j.ok&&j.heat) setServerHeat(j.heat); }).catch(()=>{});
+    try {
+      const b = localStorage.getItem(HEAT_BOOST_KEY);
+      if (b) {
+        const p = JSON.parse(b);
+        if (p?.buildingId && Date.now() - (p.ts||0) < 10*60*1000) setBoostHall(p.buildingId);
+        else localStorage.removeItem(HEAT_BOOST_KEY);
+      }
+    } catch {}
     // XP for earning preview (no new DB, existing mining dash)
     try {
       const raw = localStorage.getItem("physi_profile");
@@ -439,7 +472,14 @@ export default function BoardPage() {
         throw new Error(j.message || "No ticket this time — tap again.");
       }
       setMineKind("success");
-      setMineMsg(`Locked in for round ${j.round ?? round?.round ?? "—"} — lowest ticket wins at close.`);
+      const boostLabel = boostHall ? (BUILDING_LABEL[boostHall] || boostHall) : null;
+      if (boostLabel) {
+        setMineMsg(`Locked in for round ${j.round ?? round?.round ?? "—"} — lowest ticket wins at close. (×1.5 boost for ${boostLabel} applied — next ticket)`);
+        try { localStorage.removeItem(HEAT_BOOST_KEY); } catch {}
+        setBoostHall(null);
+      } else {
+        setMineMsg(`Locked in for round ${j.round ?? round?.round ?? "—"} — lowest ticket wins at close.`);
+      }
       await loadRound();
       await loadLeaders();
     } catch (e) {
@@ -479,6 +519,38 @@ export default function BoardPage() {
           <ChainSparkline blocks={blocks} loading={chainLoading} />
           {chainError && blocks.length > 0 && <p className="mt-1 font-mono text-[11px] text-amber-700">{chainError}</p>}
         </div>
+        {/* HEAT HALL — one-glance pending heat */}
+        {(() => {
+          const local = heatFromSlips(slips);
+          const useHeat = serverHeat || local.heat;
+          let hottest: string|null = local.hottest;
+          let max = local.max;
+          if (serverHeat) {
+            let m=0; let h:string|null=null;
+            for (const id of BUILDING_IDS) { const c = (serverHeat as any)[id]||0; if (c>m){m=c; h=id;} }
+            if (m>0){ hottest=h; max=m; }
+          }
+          const label = hottest ? (BUILDING_LABEL[hottest] || hottest) : "";
+          return (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky/20 bg-white/90 px-3 py-2 shadow-sm">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Heat Hall</span>
+              {hottest ? (
+                <span className="flex items-center gap-2 font-mono text-[11px]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-brick animate-pulse" aria-hidden />
+                  <span className="font-bold text-brick">{label} hottest · {max} pending</span>
+                  <span className="hidden sm:inline text-ink/40">open Roadmap → tap red hall for ×1.5</span>
+                  <button onClick={() => {
+                    try { localStorage.setItem(HEAT_BOOST_KEY, JSON.stringify({ buildingId: hottest, ts: Date.now() })); setBoostHall(hottest); setHeatToast(`Next ticket ×1.5 for ${label}`); setTimeout(()=>setHeatToast(""),2600);} catch {}
+                  }} className="ml-1 rounded-full bg-brick px-2.5 py-1 text-[11px] font-bold text-white hover:bg-brick/90">Tap ×1.5</button>
+                </span>
+              ) : (
+                <span className="font-mono text-[11px] text-ink/40">no pending heat — post a slip</span>
+              )}
+              {boostHall && <span className="rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">Next ticket ×1.5 for {BUILDING_LABEL[boostHall] || boostHall}</span>}
+            </div>
+          );
+        })()}
+        {heatToast && <div role="status" className="mt-2 rounded-full bg-ink px-3 py-1.5 text-center font-mono text-xs font-bold text-white">{heatToast}</div>}
 
         {/* FLOWCHART — 5 pills */}
         <div className="mt-5 overflow-x-auto">

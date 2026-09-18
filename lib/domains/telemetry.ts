@@ -1,4 +1,5 @@
 import { getDb, isDbConfigured } from "@/lib/db";
+import { BUILDINGS } from "@/lib/campus";
 
 function maxScoreForOrder(n: number): number {
   return 4 * n * (n - 1) + n * n - 1;
@@ -180,5 +181,62 @@ export async function getTelemetry(limit = 20): Promise<{
         detail: { saturatedWindow: null, barMaxRounds: [], stallReason: null },
       },
     };
+  }
+}
+
+// ── Heat Hall: pending slip heat per building ──
+// Lightweight, offline-first friendly. Counts pending physi_events per
+// venue/building (group by building_id via substring match on venue+title).
+// Returns heat map {building_id: count, maxCount, hottest}
+export type HallHeat = {
+  heat: Record<string, number>;
+  counts: Record<string, number>;
+  maxCount: number;
+  hottest: string | null;
+  totalPending: number;
+};
+
+function emptyHallHeat(): HallHeat {
+  const heat: Record<string, number> = {};
+  for (const b of BUILDINGS) heat[b.id] = 0;
+  return { heat, counts: { ...heat }, maxCount: 0, hottest: null, totalPending: 0 };
+}
+
+export async function getHallHeat(): Promise<HallHeat> {
+  if (!isDbConfigured()) return emptyHallHeat();
+  try {
+    const sql = getDb();
+    const rows = await sql<{ venue: string; title: string }[]>`
+      SELECT venue, title FROM physi_events WHERE status = 'pending' LIMIT 500
+    `;
+    const heat: Record<string, number> = {};
+    for (const b of BUILDINGS) heat[b.id] = 0;
+    for (const r of rows) {
+      const hay = `${r.venue || ""} ${r.title || ""}`.toLowerCase();
+      let matched = false;
+      for (const b of BUILDINGS) {
+        if (hay.includes(b.code.toLowerCase())) {
+          heat[b.id]++;
+          matched = true;
+          break;
+        }
+      }
+      // venue that mentions no known code → count toward closest building via hash fallback (even spread)
+      // For now, skip unmatched (keeps one-glance clean).
+      void matched;
+    }
+    let maxCount = 0;
+    let hottest: string | null = null;
+    for (const b of BUILDINGS) {
+      if (heat[b.id] > maxCount) {
+        maxCount = heat[b.id];
+        hottest = b.id;
+      }
+    }
+    // tie-break: first encountered hottest stays; if all zero, hottest stays null
+    if (maxCount === 0) hottest = null;
+    return { heat, counts: { ...heat }, maxCount, hottest, totalPending: rows.length };
+  } catch {
+    return emptyHallHeat();
   }
 }

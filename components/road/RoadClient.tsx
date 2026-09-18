@@ -16,6 +16,8 @@ export type FeedEvent = {
 
 const CACHE_KEY = "physi_timetable_cache";
 const PENDING_KEY = "physi_pending_posts";
+const HEAT_BOOST_KEY = "physi_heat_boost";
+const HEAT_CACHE_KEY = "physi_heat_cache";
 
 type PendingPost = {
   title: string;
@@ -82,7 +84,6 @@ function queuePending(post: Omit<PendingPost, "queuedAt">) {
 async function syncPendingPosts(): Promise<{ synced: number; remaining: number }> {
   const pending = getPending();
   if (pending.length === 0) return { synced: 0, remaining: 0 };
-  // if offline, don't attempt
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { synced: 0, remaining: pending.length };
   }
@@ -107,13 +108,10 @@ async function syncPendingPosts(): Promise<{ synced: number; remaining: number }
       if (j.ok || j.duplicate) {
         synced++;
       } else {
-        // server error — keep for later retry unless 4xx validation
         remaining.push(p);
       }
     } catch {
-      // network failed — keep this and all following
       remaining.push(p);
-      // push rest without trying
       const idx = pending.indexOf(p);
       for (let i = idx + 1; i < pending.length; i++) remaining.push(pending[i]);
       break;
@@ -185,12 +183,10 @@ function PostForm({ onPosted }: { onPosted: () => void }) {
       setMsg("Create a handle on Profile first.");
       return;
     }
-    // client validation
     if (!form.title.trim() || !form.venue.trim() || !form.event_date || !form.event_time) {
       setMsg("Fill all fields.");
       return;
     }
-    // offline fast-path — queue without network
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       queuePending({ ...form, scope_type: "general", created_by: uid });
       setMsg("Offline — queued, will sync when back.");
@@ -216,7 +212,6 @@ function PostForm({ onPosted }: { onPosted: () => void }) {
         setMsg(j.message || "Post failed.");
       }
     } catch {
-      // network failure — queue for later
       queuePending({ ...form, scope_type: "general", created_by: uid });
       setMsg("Offline — queued, will sync when back.");
       onPosted();
@@ -262,6 +257,10 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
   const [displayEvents, setDisplayEvents] = useState<FeedEvent[]>(events);
   const [isOffline, setIsOffline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  // heat hall
+  const [serverHeat, setServerHeat] = useState<Record<string, number> | null>(null);
+  const [boostHall, setBoostHall] = useState<string | null>(null);
+  const [heatToast, setHeatToast] = useState<string>("");
 
   useEffect(() => {
     try {
@@ -269,28 +268,36 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       const lv = raw ? JSON.parse(raw)?.level : null;
       if (lv) setLevel(lv);
     } catch {}
+    try {
+      const b = localStorage.getItem(HEAT_BOOST_KEY);
+      if (b) {
+        const p = JSON.parse(b);
+        if (p?.buildingId && Date.now() - (p.ts || 0) < 10 * 60 * 1000) setBoostHall(p.buildingId);
+        else localStorage.removeItem(HEAT_BOOST_KEY);
+      }
+    } catch {}
+    try {
+      const cachedHeat = localStorage.getItem(HEAT_CACHE_KEY);
+      if (cachedHeat) {
+        const p = JSON.parse(cachedHeat);
+        if (p?.heat) setServerHeat(p.heat);
+      }
+    } catch {}
   }, []);
 
   const refreshPendingCount = useCallback(() => {
     setPendingCount(getPending().length);
   }, []);
 
-  // Persist server-provided events to cache; hydrate offline state
   useEffect(() => {
-    // if we have server events, cache them
     if (events.length > 0) {
       setCached(events);
-      // if we were offline but now have fresh server data, stay online unless navigator says otherwise
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         setIsOffline(true);
-      } else {
-        // keep whatever isOffline was, but if we have fresh data we consider online
-        // don't forcibly clear banner if fetch previously failed
       }
       setDisplayEvents(events);
     }
     refreshPendingCount();
-    // initial offline detection
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       const cached = getCached();
       if (cached && cached.length > 0) {
@@ -298,8 +305,7 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       }
       setIsOffline(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
+  }, [events, refreshPendingCount]);
 
   const fetchTimetable = useCallback(async () => {
     try {
@@ -321,18 +327,28 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       } else if (events.length === 0) {
         setIsOffline(true);
       } else {
-        // we have displayEvents already (from props) — still show offline banner on fetch failure
         setIsOffline(true);
       }
     }
   }, [events]);
 
-  // Try to refresh after mount, and wire online/offline listeners + queue sync
+  const fetchHeat = useCallback(async () => {
+    try {
+      const r = await fetch("/api/halls/heat", { cache: "no-store" });
+      const j = await r.json();
+      if (j.ok && j.heat) {
+        setServerHeat(j.heat);
+        try { localStorage.setItem(HEAT_CACHE_KEY, JSON.stringify({ heat: j.heat, ts: Date.now() })); } catch {}
+      } else if (j.heat) {
+        // fallback when spread heat
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    // if online, attempt fresh fetch in background (keeps cache warm, light fetch)
     if (typeof navigator !== "undefined" && navigator.onLine) {
       fetchTimetable();
-      // also try to sync any pending from previous offline session
+      fetchHeat();
       syncPendingPosts().then((res) => {
         refreshPendingCount();
         if (res.synced > 0) fetchTimetable();
@@ -349,12 +365,9 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       setIsOffline(false);
       const res = await syncPendingPosts();
       refreshPendingCount();
-      if (res.synced > 0) {
-        // after sync, refresh feed
-        await fetchTimetable();
-      } else {
-        await fetchTimetable();
-      }
+      if (res.synced > 0) await fetchTimetable();
+      else await fetchTimetable();
+      await fetchHeat();
     };
     const onOffline = () => {
       setIsOffline(true);
@@ -363,35 +376,69 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
 
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-    // also listen for storage changes (other tab queued)
     const onStorage = (e: StorageEvent) => {
       if (e.key === PENDING_KEY) refreshPendingCount();
       if (e.key === CACHE_KEY && isOffline) {
         const c = getCached();
         if (c) setDisplayEvents(c);
       }
+      if (e.key === HEAT_BOOST_KEY) {
+        try {
+          const b = e.newValue ? JSON.parse(e.newValue) : null;
+          setBoostHall(b?.buildingId || null);
+        } catch {}
+      }
     };
     window.addEventListener("storage", onStorage);
+    // poll heat every 30s when online (lightweight, offline-first)
+    const heatIv = setInterval(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine) fetchHeat();
+    }, 30000);
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("storage", onStorage);
+      clearInterval(heatIv);
     };
-  }, [fetchTimetable, refreshPendingCount, isOffline]);
+  }, [fetchTimetable, fetchHeat, refreshPendingCount, isOffline]);
 
   const handlePosted = useCallback(async () => {
     refreshPendingCount();
-    // if online we reload to show new slip; if offline we keep queued count
     if (typeof navigator !== "undefined" && navigator.onLine && getPending().length === 0) {
       window.location.reload();
     } else {
-      // offline queued — keep banner visible, still try to refresh from cache
       const cached = getCached();
       if (cached) setDisplayEvents(cached);
       refreshPendingCount();
     }
   }, [refreshPendingCount]);
 
+  // local heat from pending events (offline-first, one-glance)
+  const localCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const b of BUILDINGS) m[b.id] = 0;
+    const pending = displayEvents.filter((e) => e.status === "pending");
+    for (const ev of pending) {
+      const hay = `${ev.title} ${ev.venue}`.toLowerCase();
+      for (const b of BUILDINGS) {
+        if (hay.includes(b.code.toLowerCase())) { m[b.id]++; break; }
+      }
+    }
+    return m;
+  }, [displayEvents]);
+
+  const heatCounts = serverHeat || localCounts;
+  const hottest = useMemo(() => {
+    let max = 0; let h: string | null = null;
+    for (const b of BUILDINGS) {
+      const c = heatCounts[b.id] || 0;
+      if (c > max) { max = c; h = b.id; }
+    }
+    return max > 0 ? h : null;
+  }, [heatCounts]);
+  const maxHeat = hottest ? (heatCounts[hottest] || 0) : 0;
+
+  // total nodes counts (all events) for label fallback
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const b of BUILDINGS) m[b.id] = 0;
@@ -419,8 +466,23 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
 
   const verified = displayEvents.filter((e) => e.status === "verified").length;
 
+  const onTapBuilding = useCallback((bId: string) => {
+    const isHottest = bId === hottest && (heatCounts[bId] || 0) > 0;
+    if (isHottest) {
+      try {
+        localStorage.setItem(HEAT_BOOST_KEY, JSON.stringify({ buildingId: bId, ts: Date.now() }));
+        setBoostHall(bId);
+        const label = BUILDINGS.find((x) => x.id === bId)?.code || bId;
+        setHeatToast(`Next ticket ×1.5 for ${label}`);
+        setTimeout(() => setHeatToast(""), 2600);
+      } catch {}
+    }
+    setBuildingId((prev) => (prev === bId ? null : bId));
+  }, [hottest, heatCounts]);
+
   return (
     <div className="relative z-10">
+      <style>{`@keyframes hallPulse{0%{box-shadow:0 0 0 0 rgba(220,38,38,0.55)}70%{box-shadow:0 0 0 14px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}} @keyframes heatBadgePop{0%{transform:scale(0.85)}50%{transform:scale(1.06)}100%{transform:scale(1)}}`}</style>
       {isOffline && (
         <div
           role="status"
@@ -436,6 +498,36 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
           {pendingCount} slip{pendingCount > 1 ? "s" : ""} queued — will sync when back
         </div>
       )}
+      {/* Heat Hall — one-glance strip */}
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-sky/20 bg-white/90 px-3 py-2 shadow-sm">
+        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Heat Hall</span>
+        {hottest ? (
+          <span className="flex items-center gap-2 font-mono text-[11px]">
+            <span className="inline-block h-2 w-2 rounded-full bg-brick animate-pulse" aria-hidden />
+            <span className="font-bold text-brick">{BUILDINGS.find((b)=>b.id===hottest)?.code} hottest · {maxHeat} pending</span>
+            <span className="hidden sm:inline text-ink/40">tap red hall → next ticket ×1.5</span>
+          </span>
+        ) : (
+          <span className="font-mono text-[11px] text-ink/40">no pending heat — post a slip</span>
+        )}
+        {boostHall && (
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">
+            Next ticket ×1.5 for {BUILDINGS.find((b)=>b.id===boostHall)?.code}
+          </span>
+        )}
+      </div>
+      {boostHall && (
+        <div className="mb-2 flex sm:hidden">
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">
+            Next ticket ×1.5 for {BUILDINGS.find((b)=>b.id===boostHall)?.code}
+          </span>
+        </div>
+      )}
+      {heatToast && (
+        <div role="status" aria-live="polite" className="mb-2 rounded-full bg-ink px-3 py-1.5 text-center font-mono text-xs font-bold text-white">
+          {heatToast} — lightweight hint stored (no backend change)
+        </div>
+      )}
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex gap-4 font-mono text-xs text-ink/70">
           <span>{displayEvents.length} events</span>
@@ -449,23 +541,41 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
         const pos = NODE_POSITIONS[b.id];
         if (!pos) return null;
         const active = buildingId === b.id;
+        const heat = heatCounts[b.id] || 0;
+        const isHottest = b.id === hottest && heat > 0;
+        const isWarm = heat > 0 && !isHottest;
         return (
           <button
             key={b.id}
-            onClick={() => setBuildingId(active ? null : b.id)}
+            onClick={() => onTapBuilding(b.id)}
             aria-pressed={active}
-            aria-label={`${b.label} — ${counts[b.id]} events`}
+            aria-label={`${b.label} — ${counts[b.id]} events, ${heat} pending heat${isHottest ? " — hottest" : ""}`}
             className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${pos.x}%`, top: `${pos.y / 10}%` }}
           >
-            <span
-              className="flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-lg"
-              style={{ background: b.color, outline: active ? "3px solid #0c1e3a" : "none" }}
-            >
-              {b.icon}
+            <span className="relative flex">
+              <span
+                className="flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-lg transition-transform"
+                style={{
+                  background: b.color,
+                  outline: active ? "3px solid #0c1e3a" : isHottest ? "3px solid #dc2626" : isWarm ? "2px solid #38bdf8" : "none",
+                  transform: isHottest ? "scale(1.11)" : isWarm ? "scale(1.03)" : "scale(1)",
+                  animation: isHottest ? "hallPulse 1.6s ease-out infinite" : "none",
+                }}
+              >
+                {b.icon}
+              </span>
+              {heat > 0 && (
+                <span
+                  className={`absolute -right-1 -top-1 grid h-6 min-w-[24px] place-items-center rounded-full px-1 font-mono text-[11px] font-black text-white shadow ${isHottest ? "bg-brick" : "bg-sky-500"}`}
+                  style={{ animation: isHottest ? "heatBadgePop 1.2s ease-in-out infinite" : "none" }}
+                >
+                  {heat}
+                </span>
+              )}
             </span>
-            <span className="mt-1 block rounded-full bg-white/90 px-2 py-0.5 font-mono text-[10px] font-bold">
-              {b.code} · {counts[b.id]}
+            <span className={`mt-1 block rounded-full px-2 py-0.5 font-mono text-[10px] font-bold ${isHottest ? "bg-brick text-white" : isWarm ? "bg-sky-500 text-white" : "bg-white/90 text-ink"}`}>
+              {b.code} · {counts[b.id]}{isHottest ? " 🔥" : ""}
             </span>
           </button>
         );
@@ -476,6 +586,12 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
           <p className="text-sm font-black">
             {BUILDINGS.find((b) => b.id === buildingId)?.label} — pick your level
           </p>
+          {buildingId === boostHall && boostHall && (
+            <p className="mt-1 font-mono text-[11px] font-bold text-amber-700">Next ticket ×1.5 for this hall (local hint)</p>
+          )}
+          {buildingId === hottest && hottest && (
+            <p className="mt-1 font-mono text-[11px] text-brick">🔥 Hottest hall — tap again to lock ×1.5 for next mining ticket</p>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             {LEVELS.map((lv) => (
               <button
