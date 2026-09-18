@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { BUILDINGS, LEVELS, NODE_POSITIONS } from "@/lib/campus";
 
 export type FeedEvent = {
@@ -14,6 +14,20 @@ export type FeedEvent = {
   severity?: string;
 };
 
+const CACHE_KEY = "physi_timetable_cache";
+const PENDING_KEY = "physi_pending_posts";
+
+type PendingPost = {
+  title: string;
+  venue: string;
+  event_date: string;
+  event_time: string;
+  scope_type: string;
+  scope_value?: string | null;
+  created_by: string;
+  queuedAt: number;
+};
+
 function myId(): string | null {
   try {
     const raw = localStorage.getItem("physi_profile");
@@ -21,6 +35,92 @@ function myId(): string | null {
   } catch {
     return null;
   }
+}
+
+function getCached(): FeedEvent[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as FeedEvent[];
+    if (parsed && Array.isArray(parsed.events)) return parsed.events as FeedEvent[];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setCached(events: FeedEvent[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(events));
+  } catch {}
+}
+
+function getPending(): PendingPost[] {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setPending(list: PendingPost[]) {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+function queuePending(post: Omit<PendingPost, "queuedAt">) {
+  const list = getPending();
+  list.push({ ...post, queuedAt: Date.now() });
+  setPending(list);
+}
+
+async function syncPendingPosts(): Promise<{ synced: number; remaining: number }> {
+  const pending = getPending();
+  if (pending.length === 0) return { synced: 0, remaining: 0 };
+  // if offline, don't attempt
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return { synced: 0, remaining: pending.length };
+  }
+  const remaining: PendingPost[] = [];
+  let synced = 0;
+  for (const p of pending) {
+    try {
+      const r = await fetch("/api/timetable", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: p.title,
+          venue: p.venue,
+          event_date: p.event_date,
+          event_time: p.event_time,
+          scope_type: p.scope_type,
+          scope_value: p.scope_value ?? null,
+          created_by: p.created_by,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j.ok || j.duplicate) {
+        synced++;
+      } else {
+        // server error — keep for later retry unless 4xx validation
+        remaining.push(p);
+      }
+    } catch {
+      // network failed — keep this and all following
+      remaining.push(p);
+      // push rest without trying
+      const idx = pending.indexOf(p);
+      for (let i = idx + 1; i < pending.length; i++) remaining.push(pending[i]);
+      break;
+    }
+  }
+  setPending(remaining);
+  return { synced, remaining: remaining.length };
 }
 
 function VoteButtons({ id, title }: { id: string; title: string }) {
@@ -85,6 +185,19 @@ function PostForm({ onPosted }: { onPosted: () => void }) {
       setMsg("Create a handle on Profile first.");
       return;
     }
+    // client validation
+    if (!form.title.trim() || !form.venue.trim() || !form.event_date || !form.event_time) {
+      setMsg("Fill all fields.");
+      return;
+    }
+    // offline fast-path — queue without network
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      queuePending({ ...form, scope_type: "general", created_by: uid });
+      setMsg("Offline — queued, will sync when back.");
+      setForm({ title: "", venue: "", event_date: "", event_time: "" });
+      onPosted();
+      return;
+    }
     setMsg("Posting…");
     try {
       const r = await fetch("/api/timetable", {
@@ -103,7 +216,10 @@ function PostForm({ onPosted }: { onPosted: () => void }) {
         setMsg(j.message || "Post failed.");
       }
     } catch {
-      setMsg("Network error.");
+      // network failure — queue for later
+      queuePending({ ...form, scope_type: "general", created_by: uid });
+      setMsg("Offline — queued, will sync when back.");
+      onPosted();
     }
   }
   if (!open) {
@@ -143,6 +259,10 @@ function PostForm({ onPosted }: { onPosted: () => void }) {
 export default function RoadClient({ events }: { events: FeedEvent[] }) {
   const [buildingId, setBuildingId] = useState<string | null>(null);
   const [level, setLevel] = useState<string | null>(null);
+  const [displayEvents, setDisplayEvents] = useState<FeedEvent[]>(events);
+  const [isOffline, setIsOffline] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("physi_profile");
@@ -151,20 +271,141 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
     } catch {}
   }, []);
 
+  const refreshPendingCount = useCallback(() => {
+    setPendingCount(getPending().length);
+  }, []);
+
+  // Persist server-provided events to cache; hydrate offline state
+  useEffect(() => {
+    // if we have server events, cache them
+    if (events.length > 0) {
+      setCached(events);
+      // if we were offline but now have fresh server data, stay online unless navigator says otherwise
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsOffline(true);
+      } else {
+        // keep whatever isOffline was, but if we have fresh data we consider online
+        // don't forcibly clear banner if fetch previously failed
+      }
+      setDisplayEvents(events);
+    }
+    refreshPendingCount();
+    // initial offline detection
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const cached = getCached();
+      if (cached && cached.length > 0) {
+        setDisplayEvents(cached);
+      }
+      setIsOffline(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
+
+  const fetchTimetable = useCallback(async () => {
+    try {
+      const r = await fetch("/api/timetable?limit=60", { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (j.ok && Array.isArray(j.events)) {
+        setDisplayEvents(j.events);
+        setCached(j.events);
+        setIsOffline(false);
+        return;
+      }
+      throw new Error("bad payload");
+    } catch {
+      const cached = getCached();
+      if (cached && cached.length > 0) {
+        setDisplayEvents(cached);
+        setIsOffline(true);
+      } else if (events.length === 0) {
+        setIsOffline(true);
+      } else {
+        // we have displayEvents already (from props) — still show offline banner on fetch failure
+        setIsOffline(true);
+      }
+    }
+  }, [events]);
+
+  // Try to refresh after mount, and wire online/offline listeners + queue sync
+  useEffect(() => {
+    // if online, attempt fresh fetch in background (keeps cache warm, light fetch)
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      fetchTimetable();
+      // also try to sync any pending from previous offline session
+      syncPendingPosts().then((res) => {
+        refreshPendingCount();
+        if (res.synced > 0) fetchTimetable();
+      });
+    } else {
+      const cached = getCached();
+      if (cached && cached.length > 0) {
+        setDisplayEvents(cached);
+        setIsOffline(true);
+      }
+    }
+
+    const onOnline = async () => {
+      setIsOffline(false);
+      const res = await syncPendingPosts();
+      refreshPendingCount();
+      if (res.synced > 0) {
+        // after sync, refresh feed
+        await fetchTimetable();
+      } else {
+        await fetchTimetable();
+      }
+    };
+    const onOffline = () => {
+      setIsOffline(true);
+      refreshPendingCount();
+    };
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    // also listen for storage changes (other tab queued)
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === PENDING_KEY) refreshPendingCount();
+      if (e.key === CACHE_KEY && isOffline) {
+        const c = getCached();
+        if (c) setDisplayEvents(c);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [fetchTimetable, refreshPendingCount, isOffline]);
+
+  const handlePosted = useCallback(async () => {
+    refreshPendingCount();
+    // if online we reload to show new slip; if offline we keep queued count
+    if (typeof navigator !== "undefined" && navigator.onLine && getPending().length === 0) {
+      window.location.reload();
+    } else {
+      // offline queued — keep banner visible, still try to refresh from cache
+      const cached = getCached();
+      if (cached) setDisplayEvents(cached);
+      refreshPendingCount();
+    }
+  }, [refreshPendingCount]);
+
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const b of BUILDINGS) m[b.id] = 0;
-    for (const ev of events) {
+    for (const ev of displayEvents) {
       for (const b of BUILDINGS) {
         const hay = `${ev.title} ${ev.venue}`.toLowerCase();
         if (hay.includes(b.code.toLowerCase())) m[b.id]++;
       }
     }
     return m;
-  }, [events]);
+  }, [displayEvents]);
 
   const feed = useMemo(() => {
-    let list = events;
+    let list = displayEvents;
     if (level) {
       list = list.filter((ev) => {
         const sv = String(ev.scope_value || "").toLowerCase();
@@ -174,19 +415,34 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       });
     }
     return list.slice(0, 12);
-  }, [events, level]);
+  }, [displayEvents, level]);
 
-  const verified = events.filter((e) => e.status === "verified").length;
+  const verified = displayEvents.filter((e) => e.status === "verified").length;
 
   return (
     <div className="relative z-10">
+      {isOffline && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 rounded-xl border border-amber-300 bg-amber-100 px-4 py-2 text-center font-mono text-xs font-bold text-amber-900"
+        >
+          Offline — showing last green ticks, will sync when back
+          {pendingCount > 0 ? ` · ${pendingCount} queued` : ""}
+        </div>
+      )}
+      {!isOffline && pendingCount > 0 && (
+        <div role="status" className="mb-3 rounded-xl border border-sky/30 bg-white/90 px-4 py-2 text-center font-mono text-xs text-ink/70">
+          {pendingCount} slip{pendingCount > 1 ? "s" : ""} queued — will sync when back
+        </div>
+      )}
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex gap-4 font-mono text-xs text-ink/70">
-          <span>{events.length} events</span>
+          <span>{displayEvents.length} events</span>
           <span>{verified} verified</span>
-          <span>{events.length - verified} pending</span>
+          <span>{displayEvents.length - verified} pending</span>
         </div>
-        <PostForm onPosted={() => window.location.reload()} />
+        <PostForm onPosted={handlePosted} />
       </div>
 
       {BUILDINGS.map((b) => {
