@@ -73,6 +73,68 @@ function barCapBoard(order: number): number {
   return Math.max(8, Math.floor(maxScoreForOrderBoard(order) / 6));
 }
 
+const CHAIN_CACHE_KEY = "physi_chain_cache_v3";
+
+/* sparkline: tiny SVG + mini timeline — no DB, purely tx_counts */
+function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: boolean }) {
+  const last5 = blocks.slice(0, 5);
+  // chronological left->right = oldest to newest
+  const ordered = [...last5].reverse();
+  const counts = ordered.map((b) => Math.max(0, b.tx_count ?? 0));
+  const max = Math.max(1, ...counts, 1);
+  // SVG coords: width 100, height 28, padding 2
+  const w = 100, h = 28, pad = 2;
+  const step = ordered.length > 1 ? (w - pad * 2) / (ordered.length - 1) : w - pad * 2;
+  const points = counts.map((c, i) => {
+    const x = pad + i * step;
+    const y = h - pad - (c / max) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  const area = counts.length > 1 ? `${pad},${h - pad} ${points} ${pad + (counts.length - 1) * step},${h - pad}` : "";
+  const isMoving = counts.some((c) => c > 0) || ordered.some((b) => b.status === "closed");
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-sky/25 bg-white px-3 py-2.5 shadow-sm sm:px-4">
+      <div className="shrink-0">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/40">Chain pulse · last 5</p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className={`inline-block h-2 w-2 rounded-full ${isMoving && !loading ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,.6)]" : "bg-ink/20"} ${isMoving && !loading ? "animate-pulse" : ""}`} aria-hidden />
+          <span className="font-mono text-xs font-bold tabular-nums text-ink">{loading ? "syncing…" : isMoving ? "moving" : "idle · genesis"}</span>
+          <span className="font-mono text-[11px] text-ink/40">tx/block</span>
+        </div>
+      </div>
+      <div className="hidden h-9 w-px shrink-0 bg-sky/20 sm:block" aria-hidden />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <svg viewBox={`0 0 ${w} ${h}`} className="h-7 w-[120px] shrink-0 sm:w-[160px]" preserveAspectRatio="none" aria-hidden>
+          {area && <polygon points={area} fill="rgba(125,211,252,0.22)" stroke="none" />}
+          {points && <polyline points={points} fill="none" stroke="#0369a1" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />}
+          {counts.map((c, i) => {
+            const x = pad + i * step;
+            const y = h - pad - (c / max) * (h - pad * 2);
+            return <circle key={i} cx={x} cy={y} r={counts.length === 1 ? 2.5 : 2} fill={c > 0 ? "#0369a1" : "#cbd5e1"} stroke="white" strokeWidth={0.9} />;
+          })}
+        </svg>
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {loading ? (
+            <span className="font-mono text-[11px] text-ink/40">…</span>
+          ) : ordered.length === 0 ? (
+            <span className="font-mono text-[11px] text-ink/40">no blocks yet — mine to start</span>
+          ) : (
+            ordered.map((b, i) => (
+              <span key={b.number} className="flex items-center gap-1">
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-mono text-[10px] font-bold tabular-nums ${b.status === "closed" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-sky/20 bg-sky/10 text-ink/60"}`} title={`#${b.number} · ${b.tx_count ?? 0} txs · ${shortHex(b.prev_hash, 6, 4)} → ${shortHex((b as any).winning_ticket, 6, 4)}`}>
+                  #{b.number}·{b.tx_count ?? 0}
+                </span>
+                {i < ordered.length - 1 && <span className="font-mono text-[10px] text-accent/50">→</span>}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+      <a href="/app/rounds" className="hidden shrink-0 rounded-full border border-ink/10 bg-ink px-3 py-1.5 font-mono text-[11px] font-bold text-white hover:bg-accent sm:inline-flex">View chain →</a>
+    </div>
+  );
+}
+
 export default function BoardPage() {
   // ── identity ──
   const [uid, setUid] = useState<string | null>(null);
@@ -156,6 +218,15 @@ export default function BoardPage() {
   const loadChain = useCallback(async () => {
     setChainLoading(true);
     setChainError("");
+    // offline graceful: start from cache so sparkline shows immediately
+    try {
+      const cachedRaw = localStorage.getItem(CHAIN_CACHE_KEY);
+      if (cachedRaw) {
+        const c = JSON.parse(cachedRaw);
+        if (Array.isArray(c?.blocks) && c.blocks.length > 0) setBlocks(c.blocks);
+        if (c?.schedule) setSchedule(c.schedule);
+      }
+    } catch {}
     try {
       const [rr, ss] = await Promise.all([
         fetch("/api/rounds?limit=5", { cache: "no-store" }).then((x) => x.json()),
@@ -183,19 +254,40 @@ export default function BoardPage() {
         );
         // keep cap at 3 for right column but store all 5 for count
         const rest = base.slice(3);
-        setBlocks([...enriched, ...rest]);
+        const all = [...enriched, ...rest] as BlockRow[];
+        setBlocks(all);
+        let sched: Schedule | null = null;
+        if (ss.ok) {
+          const s: Schedule = ss.version !== undefined ? ss : ss.schedule || ss;
+          setSchedule(s);
+          sched = s;
+        } else {
+          setSchedule(ss.version !== undefined ? ss : null);
+          sched = ss.version !== undefined ? ss : null;
+        }
+        try { localStorage.setItem(CHAIN_CACHE_KEY, JSON.stringify({ blocks: all, schedule: sched, ts: Date.now() })); } catch {}
       } else if (!rr.ok) {
         throw new Error(rr.message || "Could not load chain.");
-      }
-      if (ss.ok) {
-        // schedule may be wrapped as {version,...} or {ok,...}
-        const s: Schedule = ss.version !== undefined ? ss : ss.schedule || ss;
-        setSchedule(s);
       } else {
-        // non-fatal: schedule missing (pre-genesis)
-        setSchedule(ss.version !== undefined ? ss : null);
+        if (ss.ok) {
+          const s: Schedule = ss.version !== undefined ? ss : ss.schedule || ss;
+          setSchedule(s);
+        }
       }
     } catch (e) {
+      // offline cache graceful: if we have cached blocks keep them visible with soft error
+      try {
+        const cachedRaw = localStorage.getItem(CHAIN_CACHE_KEY);
+        if (cachedRaw) {
+          const c = JSON.parse(cachedRaw);
+          if (Array.isArray(c?.blocks) && c.blocks.length > 0) {
+            setBlocks(c.blocks);
+            if (c.schedule) setSchedule(c.schedule);
+            setChainError(`${e instanceof Error ? e.message : "Could not load chain."} — showing cached chain.`);
+            return;
+          }
+        }
+      } catch {}
       setChainError(e instanceof Error ? e.message : "Could not load chain.");
     } finally {
       setChainLoading(false);
@@ -380,6 +472,12 @@ export default function BoardPage() {
             Post a notice → it sits in the mempool → miners lottery it in → a block locks it with <span className="font-mono text-[11px]">prev_hash</span> + <span className="font-mono text-[11px]">tx_root</span> → chain.
             <span className="ml-1 font-semibold text-ink/80">No new coin, no new post — same products, one view.</span>
           </p>
+        </div>
+
+        {/* CHAIN PULSE — sparkline (last 5 blocks' tx_counts) — visible without opening /app/rounds */}
+        <div className="mt-4">
+          <ChainSparkline blocks={blocks} loading={chainLoading} />
+          {chainError && blocks.length > 0 && <p className="mt-1 font-mono text-[11px] text-amber-700">{chainError}</p>}
         </div>
 
         {/* FLOWCHART — 5 pills */}
