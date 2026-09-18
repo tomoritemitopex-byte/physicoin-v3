@@ -384,10 +384,29 @@ export async function miningDashboard(user_id: string) {
     SELECT COUNT(*)::int AS rounds_won
     FROM physi_rounds
     WHERE winner_user_id = ${user_id} AND status = 'closed'`;
+  // One-glance: your best ticket for the current round (if any)
+  let current_ticket: string | null = null;
+  let current_round: number | null = null;
+  let submits_this_round = 0;
+  try {
+    const n = roundNumberAt(Date.now());
+    current_round = n;
+    const t = await sql<{ ticket: string | null }[]>`
+      SELECT ticket_hex AS ticket FROM physi_round_proofs
+      WHERE round_number = ${n} AND user_id = ${user_id}
+      ORDER BY ticket_hex ASC LIMIT 1`;
+    current_ticket = t[0]?.ticket || null;
+    const c = await sql<{ c: number }[]>`
+      SELECT count(*)::int AS c FROM physi_round_proofs WHERE round_number = ${n} AND user_id = ${user_id}`;
+    submits_this_round = c[0]?.c ?? 0;
+  } catch {}
   return {
     balance: users[0].mining_balance,
     display_name: users[0].display_name,
     receipts,
+    current_ticket,
+    current_round,
+    submits_this_round,
     stats: {
       accepted_proofs: stats?.accepted_proofs ?? 0,
       total_rewards: stats?.total_rewards ?? "0",
