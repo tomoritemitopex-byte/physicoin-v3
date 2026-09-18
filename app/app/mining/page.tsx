@@ -235,15 +235,22 @@ export default function MiningPage() {
       </header>
 
       <main className="mx-auto max-w-[1120px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
+        {/* advanced view banner — primary is now invisible */}
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-700">Advanced view — mining is now invisible</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/70">
+            A timetable edit <em>is</em> the mine — when you post a slip on the Board, we grind your ticket for that round in the background. This page is for enthusiasts. Primary flow: post on <a href="/app/board" className="font-bold text-accent underline">Board</a> → <span className="font-mono text-xs">“Posted — mining in background, locks in next block”</span>
+          </p>
+        </div>
         {/* eyebrow + title — human language, no lattice/nonce */}
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-accent">One tap · one ticket · lowest wins</p>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-accent">One tap · one ticket · lowest wins — advanced</p>
             <h1 className="font-display mt-1 text-[34px] font-black leading-none tracking-tight sm:text-[40px]">
               Mine <span className="font-normal text-ink/35">· Round {loading ? "…" : round ? round.round : "—"}</span>
             </h1>
             <p className="mt-2 max-w-[560px] text-[14px] leading-relaxed text-ink/60">
-              Tap once — we grind 64 tickets behind the scenes and keep your best. <span className="font-semibold text-ink/80">Lower ticket wins</span> when the round closes.
+              Tap once — we grind 64 tickets behind the scenes and keep your best. <span className="font-semibold text-ink/80">Lower ticket wins</span> when the round closes. Prefer invisible? Just post on Board.
             </p>
           </div>
           <div className="flex items-center gap-3">

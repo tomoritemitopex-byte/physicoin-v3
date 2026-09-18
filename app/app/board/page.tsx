@@ -278,9 +278,11 @@ export default function BoardPage() {
     setPostBusy(true);
     setPostMsg("Posting…");
     try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (session) headers["authorization"] = `Bearer ${session}`;
       const r = await fetch("/api/timetable", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body: JSON.stringify({
           title: postForm.title.trim().slice(0, 200),
           venue: postForm.venue.trim().slice(0, 200),
@@ -288,6 +290,8 @@ export default function BoardPage() {
           event_time: postForm.event_time,
           scope_type: "general",
           created_by: uid,
+          token: session || undefined,
+          _mine: true,
         }),
       });
       const j = await r.json();
@@ -295,10 +299,20 @@ export default function BoardPage() {
       if (j.duplicate) {
         setPostMsg("That notice already exists.");
       } else {
-        setPostMsg("Pinned — now waiting for classmates.");
+        // Invisible mining: a timetable edit IS the mine — grind in background.
+        // Server auto-grinds via _mine flag; also fire client-side POST /api/mining as best-effort lottery entry.
+        if (uid && session) {
+          fetch("/api/mining", {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${session}` },
+            body: JSON.stringify({ user_id: uid }),
+          }).catch(() => {});
+        }
+        setPostMsg("Posted — mining in background, locks in next block");
         setPostForm({ title: "", venue: "", event_date: "", event_time: "" });
         setPostOpen(false);
         await loadSlips();
+        loadRound().catch(() => {});
       }
     } catch (e) {
       setPostMsg(e instanceof Error ? e.message : "Post failed.");
