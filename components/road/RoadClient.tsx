@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { BUILDINGS, LEVELS, NODE_POSITIONS } from "@/lib/campus";
+import QuizPost from "./QuizPost";
 
 export type FeedEvent = {
   id: string;
@@ -87,26 +88,44 @@ async function syncPendingPosts(): Promise<{ synced: number; remaining: number }
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { synced: 0, remaining: pending.length };
   }
+  // Include session when retrying queued posts — offline queue preserved with invisible mining
+  let token = "";
+  try { token = localStorage.getItem("physi_session") || ""; } catch {}
   const remaining: PendingPost[] = [];
   let synced = 0;
   for (const p of pending) {
     try {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (token) headers["authorization"] = `Bearer ${token}`;
+      // queued posts from QuizPost already include token/_mine; fall back to current token
+      const body: Record<string, unknown> = {
+        title: p.title,
+        venue: p.venue,
+        event_date: p.event_date,
+        event_time: p.event_time,
+        scope_type: p.scope_type,
+        scope_value: (p as any).scope_value ?? p.scope_value ?? null,
+        created_by: p.created_by,
+        _mine: (p as any)._mine ?? true,
+      };
+      if ((p as any).token) body.token = (p as any).token;
+      else if (token) body.token = token;
       const r = await fetch("/api/timetable", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: p.title,
-          venue: p.venue,
-          event_date: p.event_date,
-          event_time: p.event_time,
-          scope_type: p.scope_type,
-          scope_value: p.scope_value ?? null,
-          created_by: p.created_by,
-        }),
+        headers,
+        body: JSON.stringify(body),
       });
       const j = await r.json().catch(() => ({}));
       if (j.ok || j.duplicate) {
         synced++;
+        // invisible mining also on retry — server handles _mine; best-effort client ticket
+        if (token && p.created_by) {
+          fetch("/api/mining", {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+            body: JSON.stringify({ user_id: p.created_by }),
+          }).catch(() => {});
+        }
       } else {
         remaining.push(p);
       }
@@ -174,81 +193,9 @@ function VoteButtons({ id, title }: { id: string; title: string }) {
 }
 
 function PostForm({ onPosted }: { onPosted: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", venue: "", event_date: "", event_time: "" });
-  const [msg, setMsg] = useState("");
-  async function submit() {
-    const uid = myId();
-    if (!uid) {
-      setMsg("Create a handle on Profile first.");
-      return;
-    }
-    if (!form.title.trim() || !form.venue.trim() || !form.event_date || !form.event_time) {
-      setMsg("Fill all fields.");
-      return;
-    }
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      queuePending({ ...form, scope_type: "general", created_by: uid });
-      setMsg("Offline — queued, will sync when back.");
-      setForm({ title: "", venue: "", event_date: "", event_time: "" });
-      onPosted();
-      return;
-    }
-    setMsg("Posting…");
-    try {
-      const r = await fetch("/api/timetable", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, scope_type: "general", created_by: uid }),
-      });
-      const j = await r.json();
-      if (j.ok && !j.duplicate) {
-        setMsg("Posted!");
-        setForm({ title: "", venue: "", event_date: "", event_time: "" });
-        onPosted();
-      } else if (j.duplicate) {
-        setMsg("That one already exists.");
-      } else {
-        setMsg(j.message || "Post failed.");
-      }
-    } catch {
-      queuePending({ ...form, scope_type: "general", created_by: uid });
-      setMsg("Offline — queued, will sync when back.");
-      onPosted();
-    }
-  }
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white">
-        + Post
-      </button>
-    );
-  }
-  return (
-    <div className="rounded-2xl border border-sky/30 bg-white p-4">
-      <div className="grid grid-cols-2 gap-2">
-        {(["title", "venue", "event_date", "event_time"] as const).map((f) => (
-          <input
-            key={f}
-            value={form[f]}
-            onChange={(e) => setForm({ ...form, [f]: e.target.value })}
-            placeholder={f.replace("_", " ")}
-            type={f.startsWith("event_") ? (f === "event_date" ? "date" : "time") : "text"}
-            className="rounded-lg border border-sky/30 px-3 py-2 text-sm"
-          />
-        ))}
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        <button onClick={submit} className="rounded-full bg-forest px-4 py-2 text-sm font-bold text-white">
-          Post change
-        </button>
-        <button onClick={() => setOpen(false)} className="text-sm text-ink/60">
-          Cancel
-        </button>
-        {msg && <span className="font-mono text-[11px] text-ink/60">{msg}</span>}
-      </div>
-    </div>
-  );
+  // Conversational 3-step flow: prompt engineering IS the interface.
+  // Preserves offline queue + invisible mining via QuizPost.
+  return <QuizPost onPosted={onPosted} variant="road" />;
 }
 
 export default function RoadClient({ events }: { events: FeedEvent[] }) {

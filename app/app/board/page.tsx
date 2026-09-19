@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import QuizPost from "@/components/road/QuizPost";
 
 type Slip = {
   id: string;
@@ -304,10 +305,7 @@ export default function BoardPage() {
   const [slips, setSlips] = useState<Slip[]>([]);
   const [slipsLoading, setSlipsLoading] = useState(true);
   const [slipsError, setSlipsError] = useState("");
-  const [postOpen, setPostOpen] = useState(false);
-  const [postForm, setPostForm] = useState({ title: "", venue: "", event_date: "", event_time: "" });
-  const [postMsg, setPostMsg] = useState("");
-  const [postBusy, setPostBusy] = useState(false);
+  // Conversational flow lives in QuizPost (components/road/QuizPost.tsx) — one glance, no legacy form state.
 
   // ── mining ──
   const [round, setRound] = useState<CurrentRound | null>(null);
@@ -588,62 +586,7 @@ export default function BoardPage() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  // ── actions ──
-  async function postSlip() {
-    if (!uid) {
-      setPostMsg("Create a handle on Profile first.");
-      return;
-    }
-    if (!postForm.title.trim() || !postForm.venue.trim() || !postForm.event_date || !postForm.event_time) {
-      setPostMsg("Fill all four — what, where, date, time.");
-      return;
-    }
-    setPostBusy(true);
-    setPostMsg("Posting…");
-    try {
-      const headers: Record<string, string> = { "content-type": "application/json" };
-      if (session) headers["authorization"] = `Bearer ${session}`;
-      const r = await fetch("/api/timetable", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          title: postForm.title.trim().slice(0, 200),
-          venue: postForm.venue.trim().slice(0, 200),
-          event_date: postForm.event_date,
-          event_time: postForm.event_time,
-          scope_type: "general",
-          created_by: uid,
-          token: session || undefined,
-          _mine: true,
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.message || "Post failed.");
-      if (j.duplicate) {
-        setPostMsg("That notice already exists.");
-      } else {
-        // Invisible mining: a timetable edit IS the mine — grind in background.
-        // Server auto-grinds via _mine flag; also fire client-side POST /api/mining as best-effort lottery entry.
-        if (uid && session) {
-          fetch("/api/mining", {
-            method: "POST",
-            headers: { "content-type": "application/json", authorization: `Bearer ${session}` },
-            body: JSON.stringify({ user_id: uid }),
-          }).catch(() => {});
-        }
-        setPostMsg("Posted — mining in background, locks in next block");
-        setPostForm({ title: "", venue: "", event_date: "", event_time: "" });
-        setPostOpen(false);
-        await loadSlips();
-        loadRound().catch(() => {});
-      }
-    } catch (e) {
-      setPostMsg(e instanceof Error ? e.message : "Post failed.");
-    } finally {
-      setPostBusy(false);
-    }
-  }
-
+  // ── actions ── (posting now via QuizPost 3-step conversational flow — see components/road/QuizPost.tsx)
   async function mine() {
     if (!uid || !session) {
       setMineKind("error");
@@ -815,72 +758,20 @@ export default function BoardPage() {
             </div>
             <p className="mt-1 font-mono text-[11px] leading-relaxed text-ink/50">Mempool — newest venue changes, awaiting votes. Up to 12 seal into the next block.</p>
 
-            {/* post button — quiz-style */}
+            {/* Conversational posting — prompt engineering IS the interface (3-step, one tap, progress bar) */}
             <div className="mt-3">
-              {!postOpen ? (
-                <button
-                  onClick={() => {
-                    if (!uid) {
-                      setPostMsg("Create a handle on Profile first.");
-                      setPostOpen(true);
-                      return;
-                    }
-                    setPostOpen(true);
-                    setPostMsg("");
-                  }}
-                  className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-[13px] font-bold text-white shadow hover:bg-accent/90"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20 text-[12px]">✎</span>
-                  Post a slip
-                </button>
-              ) : (
-                <div className="rounded-2xl border border-sky/30 bg-paper p-3">
-                  <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Quiz — what moved?</p>
-                  <div className="mt-2 grid grid-cols-1 gap-2">
-                    <input
-                      value={postForm.title}
-                      onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
-                      placeholder="What — e.g. Physiology lecture"
-                      className="rounded-xl border border-sky/25 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-ink/30 focus:border-accent/40"
-                    />
-                    <input
-                      value={postForm.venue}
-                      onChange={(e) => setPostForm({ ...postForm, venue: e.target.value })}
-                      placeholder="Where — e.g. Hall B → Hall C"
-                      className="rounded-xl border border-sky/25 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-ink/30 focus:border-accent/40"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        value={postForm.event_date}
-                        onChange={(e) => setPostForm({ ...postForm, event_date: e.target.value })}
-                        type="date"
-                        className="rounded-xl border border-sky/25 bg-white px-3 py-2.5 text-sm outline-none focus:border-accent/40"
-                      />
-                      <input
-                        value={postForm.event_time}
-                        onChange={(e) => setPostForm({ ...postForm, event_time: e.target.value })}
-                        type="time"
-                        className="rounded-xl border border-sky/25 bg-white px-3 py-2.5 text-sm outline-none focus:border-accent/40"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      onClick={postSlip}
-                      disabled={postBusy}
-                      className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-accent disabled:opacity-50"
-                    >
-                      {postBusy ? "Pinning…" : "Pin it"}
-                    </button>
-                    <button onClick={() => { setPostOpen(false); setPostMsg(""); }} className="text-sm font-semibold text-ink/50 hover:text-ink">
-                      Cancel
-                    </button>
-                  </div>
-                  {postMsg && <p className="mt-2 font-mono text-[11px] leading-relaxed text-ink/60">{postMsg}</p>}
-                  {!uid && <p className="mt-1 font-mono text-[10px] text-brick">Need a handle — <a href="/app/profile" className="underline">create one on Profile</a></p>}
-                </div>
+              <QuizPost
+                variant="board"
+                onPosted={() => {
+                  loadSlips();
+                  loadRound().catch(() => {});
+                }}
+              />
+              {!uid && (
+                <p className="mt-2 font-mono text-[10px] text-brick">
+                  Need a handle — <a href="/app/profile" className="underline">create one on Profile</a>
+                </p>
               )}
-              {postMsg && !postOpen && <p className="mt-2 font-mono text-[11px] text-ink/60">{postMsg}</p>}
             </div>
 
             {/* slips list */}
