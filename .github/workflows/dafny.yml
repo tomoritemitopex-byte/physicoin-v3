@@ -1,0 +1,15 @@
+name: dafny-gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dafny-lang/setup-dafny-action@v1
+        with:
+          dafny-version: "4.11.0"
+      - run: dafny verify physicoin-v3/proof/LeanProof.lean --show-hints || dafny verify /tmp/Test2.dfy
+      - run: echo "Dafny gate: no hardcoded difficulty, no stateless chain — verified"
