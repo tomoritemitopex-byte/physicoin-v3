@@ -75,6 +75,8 @@ function barCapBoard(order: number): number {
 
 const CHAIN_CACHE_KEY = "physi_chain_cache_v3";
 const HEAT_BOOST_KEY = "physi_heat_boost";
+const ALIAS_CACHE_KEY = "physi_alias_cache_v3";
+type AliasRow = { id: string; alias: string; canonical: string; votes_yes: number; votes_no: number; status: string };
 const BUILDING_CODES = ["ANAT","PHYSIOL","BIOCHEM","MBBS","PHARM","COMM MED","NURS","BMLS"] as const;
 const BUILDING_IDS = ["anat","phys","biochem","mbbs","pharm","commed","nursing","lab"] as const;
 const BUILDING_LABEL: Record<string,string> = { anat:"ANAT", phys:"PHYSIOL", biochem:"BIOCHEM", mbbs:"MBBS", pharm:"PHARM", commed:"COMM MED", nursing:"NURS", lab:"BMLS" };
@@ -194,6 +196,11 @@ export default function BoardPage() {
   const [boostHall, setBoostHall] = useState<string | null>(null);
   const [heatToast, setHeatToast] = useState("");
   const [serverHeat, setServerHeat] = useState<Record<string,number> | null>(null);
+  // Name votes strip (hall alias disputes)
+  const [aliases, setAliases] = useState<AliasRow[]>([]);
+  const [aliasLoading, setAliasLoading] = useState(true);
+  const [aliasBusy, setAliasBusy] = useState<string | null>(null);
+  const [aliasMsg, setAliasMsg] = useState("");
 
   // identity once
   useEffect(() => {
@@ -329,11 +336,64 @@ export default function BoardPage() {
     }
   }, []);
 
+  const loadAliases = useCallback(async () => {
+    setAliasLoading(true);
+    try {
+      const cached = localStorage.getItem(ALIAS_CACHE_KEY);
+      if (cached) {
+        const c = JSON.parse(cached);
+        if (Array.isArray(c?.proposals)) {
+          const top = (c.proposals as AliasRow[]).slice(0, 3);
+          if (top.length) setAliases(top);
+        }
+      }
+    } catch {}
+    try {
+      const r = await fetch("/api/halls/alias?status=pending", { cache: "no-store" });
+      const j = await r.json();
+      if (j.ok && Array.isArray(j.proposals)) {
+        const top = (j.proposals as AliasRow[]).slice(0, 3);
+        setAliases(top);
+        try { localStorage.setItem(ALIAS_CACHE_KEY, JSON.stringify({ proposals: j.proposals, ts: Date.now() })); } catch {}
+      }
+    } catch {}
+    finally { setAliasLoading(false); }
+  }, []);
+
+  async function voteAlias(row: AliasRow) {
+    if (!uid || !session) {
+      setAliasMsg("Unlock your wallet on Profile — we need your session to vote.");
+      return;
+    }
+    setAliasBusy(row.id);
+    setAliasMsg("");
+    try {
+      const headers: Record<string, string> = { "content-type": "application/json", authorization: `Bearer ${session}` };
+      const r = await fetch("/api/halls/alias", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ alias_name: row.alias, canonical_name: row.canonical, voter_id: uid, vote: "yes", token: session }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        if (j.code === "RATE_LIMITED" || j.message?.includes("25")) throw new Error("25/25 used this round — wait for next.");
+        throw new Error(j.message || "Vote failed.");
+      }
+      setAliasMsg(`Voted yes for ${row.alias} → ${row.canonical}`);
+      await loadAliases();
+      // refresh heat so alias contribution moves Heat Hall instantly
+      fetch("/api/halls/heat", { cache: "no-store" }).then((x)=>x.json()).then((j2)=>{ if(j2.ok) setServerHeat(j2.heat || j2); }).catch(()=>{});
+    } catch (e) {
+      setAliasMsg(e instanceof Error ? e.message : "Vote failed.");
+    } finally { setAliasBusy(null); }
+  }
+
   useEffect(() => {
     loadSlips();
     loadRound();
     loadChain();
     loadLeaders();
+    loadAliases();
     // Heat Hall fetch (offline-first uses slips fallback)
     fetch("/api/halls/heat", { cache: "no-store" }).then((r)=>r.json()).then((j)=>{ if(j.ok&&j.heat) setServerHeat(j.heat); }).catch(()=>{});
     try {
@@ -357,7 +417,7 @@ export default function BoardPage() {
           .catch(() => {});
       }
     } catch {}
-  }, [loadSlips, loadRound, loadChain, loadLeaders]);
+  }, [loadSlips, loadRound, loadChain, loadLeaders, loadAliases]);
 
   // countdown
   useEffect(() => {
@@ -551,6 +611,34 @@ export default function BoardPage() {
           );
         })()}
         {heatToast && <div role="status" className="mt-2 rounded-full bg-ink px-3 py-1.5 text-center font-mono text-xs font-bold text-white">{heatToast}</div>}
+        {/* NAME VOTES — pending hall alias disputes (vine visibility) */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/60 bg-amber-50/80 px-3 py-2 shadow-sm">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-800">Name votes</span>
+          {aliasLoading ? (
+            <span className="font-mono text-[11px] text-ink/40">syncing…</span>
+          ) : aliases.length === 0 ? (
+            <span className="font-mono text-[11px] text-ink/40">no pending hall disputes — e.g. LT1 vs Lecture Theatre 1 will appear here</span>
+          ) : (
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              {aliases.slice(0, 3).map((a) => (
+                <span key={a.id} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-2.5 py-1 font-mono text-[11px] shadow-sm">
+                  <span className="font-bold text-ink">{a.alias} → {a.canonical}</span>
+                  <span className="rounded-full bg-ink/5 px-1.5 py-0.5 text-[10px] tabular-nums text-ink/60">{Number(a.votes_yes) || 0}Y · {Number(a.votes_no) || 0}N</span>
+                  <button
+                    onClick={() => voteAlias(a)}
+                    disabled={!!aliasBusy || (!uid || !session)}
+                    className={`ml-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${uid && session ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-ink/10 text-ink/30 cursor-not-allowed"} disabled:opacity-50`}
+                    title={uid && session ? "Vote yes (25 cap respected)" : "Unlock wallet on Profile to vote"}
+                  >
+                    {aliasBusy === a.id ? "…" : "Vote"}
+                  </button>
+                </span>
+              ))}
+              <a href="/app/roadmap" className="font-mono text-[11px] font-bold text-amber-700 hover:underline">all →</a>
+            </div>
+          )}
+        </div>
+        {aliasMsg && <p className="mt-1 font-mono text-[11px] text-ink/60" role="status">{aliasMsg}</p>}
 
         {/* FLOWCHART — 5 pills */}
         <div className="mt-5 overflow-x-auto">

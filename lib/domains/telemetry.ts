@@ -235,7 +235,63 @@ export async function getHallHeat(): Promise<HallHeat> {
     }
     // tie-break: first encountered hottest stays; if all zero, hottest stays null
     if (maxCount === 0) hottest = null;
-    return { heat, counts: { ...heat }, maxCount, hottest, totalPending: rows.length };
+
+    // ── Alias vine heat: pending hall name disputes add to hall heat ──
+    // Each pending alias dispute contributes 1 + vote count to the building
+    // whose code/label/id appears in alias or canonical; unmatched disputes
+    // bump the current hottest so vine activity is never invisible.
+    let aliasDisputes = 0;
+    try {
+      const aliasRows = await sql<{ alias: string; canonical: string; votes_yes: number; votes_no: number; vc: number }[]>`
+        SELECT alias, canonical, votes_yes, votes_no,
+          (SELECT count(*)::int FROM physi_hall_alias_votes v WHERE v.alias_id = physi_hall_aliases.id) as vc
+        FROM physi_hall_aliases WHERE status = 'pending' LIMIT 200
+      `;
+      aliasDisputes = aliasRows.length;
+      for (const ar of aliasRows) {
+        const hay = `${ar.alias || ""} ${ar.canonical || ""}`.toLowerCase();
+        let target: string | null = null;
+        for (const b of BUILDINGS) {
+          if (
+            hay.includes(b.code.toLowerCase()) ||
+            hay.includes(b.id.toLowerCase()) ||
+            hay.includes(b.label.toLowerCase())
+          ) {
+            target = b.id;
+            break;
+          }
+        }
+        const snapVotes = (Number(ar.votes_yes) || 0) + (Number(ar.votes_no) || 0);
+        const liveVotes = Number(ar.vc) || 0;
+        const v = Math.max(snapVotes, liveVotes);
+        const add = v > 0 ? v : 1;
+        if (target) {
+          heat[target] += add;
+        } else {
+          let fallback = hottest;
+          if (!fallback) {
+            let m = 0;
+            for (const bb of BUILDINGS) if (heat[bb.id] > m) { m = heat[bb.id]; fallback = bb.id; }
+          }
+          if (fallback) heat[fallback] += add;
+          else heat[BUILDINGS[0].id] += add;
+        }
+      }
+      // recalc hottest/maxCount after alias contribution
+      maxCount = 0;
+      hottest = null;
+      for (const b of BUILDINGS) {
+        if (heat[b.id] > maxCount) {
+          maxCount = heat[b.id];
+          hottest = b.id;
+        }
+      }
+      if (maxCount === 0) hottest = null;
+    } catch {
+      // missing table or no alias heat — keep slip heat only
+    }
+
+    return { heat, counts: { ...heat }, maxCount, hottest, totalPending: rows.length + aliasDisputes };
   } catch {
     return emptyHallHeat();
   }
