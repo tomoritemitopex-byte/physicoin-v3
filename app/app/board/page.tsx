@@ -76,6 +76,7 @@ function barCapBoard(order: number): number {
 const CHAIN_CACHE_KEY = "physi_chain_cache_v3";
 const HEAT_BOOST_KEY = "physi_heat_boost";
 const ALIAS_CACHE_KEY = "physi_alias_cache_v3";
+const GROWTH_CACHE_KEY = "physi_growth_pulse_cache_v3";
 type AliasRow = { id: string; alias: string; canonical: string; votes_yes: number; votes_no: number; status: string };
 const BUILDING_CODES = ["ANAT","PHYSIOL","BIOCHEM","MBBS","PHARM","COMM MED","NURS","BMLS"] as const;
 const BUILDING_IDS = ["anat","phys","biochem","mbbs","pharm","commed","nursing","lab"] as const;
@@ -152,6 +153,143 @@ function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: bool
         </div>
       </div>
       <a href="/app/rounds" className="hidden shrink-0 rounded-full border border-ink/10 bg-ink px-3 py-1.5 font-mono text-[11px] font-bold text-white hover:bg-accent sm:inline-flex">View chain →</a>
+    </div>
+  );
+}
+
+/* Growth Pulse — exit-metrics one-glance card
+   Offline-first, additive, no new tables.
+   Fetches /api/stats (7d wallets + slips) + /api/telemetry (tx_count windows).
+   - green "Compounding — invite now" when new wallets >5 and win rate >30%
+   - amber "Saturated — consider listing" when tx_count==0 for 3 rounds */
+function GrowthPulse() {
+  const [loading, setLoading] = useState(true);
+  const [newWallets, setNewWallets] = useState<number | null>(null);
+  const [slips7d, setSlips7d] = useState<number | null>(null);
+  const [winRate, setWinRate] = useState<number | null>(null);
+  const [saturated, setSaturated] = useState(false);
+  const [degraded, setDegraded] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    // offline cache first — one-glance even without network
+    try {
+      const raw = localStorage.getItem(GROWTH_CACHE_KEY);
+      if (raw) {
+        const c = JSON.parse(raw);
+        if (typeof c.newWallets === "number") setNewWallets(c.newWallets);
+        if (typeof c.slips7d === "number") setSlips7d(c.slips7d);
+        if (typeof c.winRate === "number") setWinRate(c.winRate);
+        if (typeof c.saturated === "boolean") setSaturated(c.saturated);
+      }
+    } catch {}
+    try {
+      const [sRes, tRes] = await Promise.all([
+        fetch("/api/stats", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch("/api/telemetry?limit=7", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      ]);
+      let nw: number | null = null;
+      let sp: number | null = null;
+      let degradedFlag = false;
+      if (sRes) {
+        if (sRes.ok) {
+          nw = Number(sRes.users_7d ?? sRes.users_new_7d ?? 0);
+          sp = Number(sRes.events_7d ?? sRes.events_new_7d ?? sRes.events ?? 0);
+          degradedFlag = !!sRes.degraded;
+          if (Number.isNaN(nw)) nw = 0;
+          if (Number.isNaN(sp)) sp = 0;
+        } else if (sRes.code === "DB_NOT_CONFIGURED") degradedFlag = true;
+      }
+      // telemetry win rate + saturated
+      let wr: number | null = null;
+      let sat = false;
+      if (tRes && tRes.ok) {
+        const rounds: any[] = tRes.recentRounds || tRes.rounds || [];
+        // win rate = share of rounds with tx_count>0 (last 7)
+        const window = rounds.slice(0, 7);
+        if (window.length > 0) {
+          const wins = window.filter((r: any) => Number(r.tx_count ?? 0) > 0).length;
+          wr = Math.round((wins / window.length) * 100);
+        } else {
+          wr = 0;
+        }
+        // saturated: flag from server or 3 consecutive tx_count==0
+        if (tRes.flags?.SATURATED) sat = true;
+        else {
+          const asc = [...window].sort((a: any, b: any) => a.round - b.round);
+          for (let i = 0; i + 2 < asc.length; i++) {
+            const w = asc.slice(i, i + 3);
+            if (w[1].round !== w[0].round + 1 || w[2].round !== w[1].round + 1) continue;
+            if (w.every((r: any) => Number(r.tx_count ?? 0) === 0)) { sat = true; break; }
+          }
+          // also simple last-3 check chronological newest
+          if (!sat && window.length >= 3) {
+            const last3 = window.slice(0, 3);
+            if (last3.every((r: any) => Number(r.tx_count ?? 0) === 0)) sat = true;
+          }
+        }
+        if (tRes.degraded) degradedFlag = true;
+      }
+      if (nw !== null) setNewWallets(nw);
+      if (sp !== null) setSlips7d(sp);
+      if (wr !== null) setWinRate(wr);
+      setSaturated(sat);
+      setDegraded(degradedFlag);
+      try {
+        const toCache: any = {};
+        if (nw !== null) toCache.newWallets = nw;
+        if (sp !== null) toCache.slips7d = sp;
+        if (wr !== null) toCache.winRate = wr;
+        toCache.saturated = sat;
+        toCache.ts = Date.now();
+        if (Object.keys(toCache).length > 1) localStorage.setItem(GROWTH_CACHE_KEY, JSON.stringify(toCache));
+      } catch {}
+    } catch {
+      // keep cached values
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const compounding = !saturated && (newWallets ?? 0) > 5 && (winRate ?? 0) > 30;
+  const status = saturated
+    ? { label: "Saturated — consider listing", dot: "bg-amber-500", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-800" }
+    : compounding
+    ? { label: "Compounding — invite now", dot: "bg-emerald-500", bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-800" }
+    : { label: "Steady — keep building", dot: "bg-sky", bg: "bg-sky/10", border: "border-sky/20", text: "text-ink/70" };
+
+  return (
+    <div className={`mt-3 rounded-2xl border ${status.border} ${status.bg} px-3 py-3 shadow-sm sm:px-4`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Growth Pulse · 7d</span>
+          {degraded && <span className="rounded-full bg-ink/10 px-2 py-0.5 font-mono text-[10px] text-ink/50">cached</span>}
+        </div>
+        <span className={`inline-flex items-center gap-1.5 rounded-full border ${status.border} bg-white px-2.5 py-1 font-mono text-[11px] font-bold ${status.text}`}>
+          <span className={`h-2 w-2 rounded-full ${status.dot} ${saturated || compounding ? "animate-pulse" : ""}`} aria-hidden />
+          {status.label}
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-white px-2.5 py-2 text-center shadow-sm sm:px-3">
+          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/40">New wallets</p>
+          <p className="font-mono text-[15px] font-black tabular-nums text-ink">{loading && newWallets === null ? "…" : String(newWallets ?? 0)}</p>
+        </div>
+        <div className="rounded-xl bg-white px-2.5 py-2 text-center shadow-sm sm:px-3">
+          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/40">Slips posted</p>
+          <p className="font-mono text-[15px] font-black tabular-nums text-ink">{loading && slips7d === null ? "…" : String(slips7d ?? 0)}</p>
+        </div>
+        <div className="rounded-xl bg-white px-2.5 py-2 text-center shadow-sm sm:px-3">
+          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/40">Win rate</p>
+          <p className="font-mono text-[15px] font-black tabular-nums text-ink">{loading && winRate === null ? "…" : `${winRate ?? 0}%`}</p>
+        </div>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 font-mono text-[10px] leading-none">
+        <span className="text-ink/40">invite drives wallets · slips drive tx · wins drive chain</span>
+        <button onClick={load} className="font-bold text-ink/40 hover:text-ink">↻ refresh</button>
+      </div>
     </div>
   );
 }
@@ -1033,6 +1171,9 @@ export default function BoardPage() {
             </div>
           )}
         </section>
+
+        {/* Growth Pulse — exit-metrics one-glance card (additive, below leaderboard) */}
+        <GrowthPulse />
 
         <p className="mt-6 text-center font-mono text-[11px] text-ink/35">One glance, no jargon · Post = human, Mine = lottery, Block = receipt, Chain = proof · mempool → block locks up to 12 slips</p>
       </div>

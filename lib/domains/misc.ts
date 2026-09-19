@@ -75,16 +75,42 @@ export async function consensusFeed(limit = 50) {
 
 export async function stats() {
   const sql = getDb();
-  const [u] = await sql<{ users: number; events: number; verifications: number; mined: number }[]>`
-    SELECT (SELECT count(*)::int FROM physi_users) AS users,
-      (SELECT count(*)::int FROM physi_events) AS events,
-      (SELECT count(*)::int FROM physi_verifications) AS verifications,
-      (SELECT count(*)::int FROM physi_mining_logs) AS mined`;
+  // base counts + 7d window (additive: no new tables, just time-filtered counts)
+  let users = 0, events = 0, verifications = 0, mined = 0;
+  let users_7d = 0, events_7d = 0;
+  try {
+    const [u] = await sql<{ users: number; events: number; verifications: number; mined: number; users_7d: number; events_7d: number }[]>`
+      SELECT (SELECT count(*)::int FROM physi_users) AS users,
+        (SELECT count(*)::int FROM physi_users WHERE created_at >= NOW() - INTERVAL '7 days') AS users_7d,
+        (SELECT count(*)::int FROM physi_events) AS events,
+        (SELECT count(*)::int FROM physi_events WHERE created_at >= NOW() - INTERVAL '7 days') AS events_7d,
+        (SELECT count(*)::int FROM physi_verifications) AS verifications,
+        (SELECT count(*)::int FROM physi_mining_logs) AS mined`;
+    users = Number((u as any).users ?? 0);
+    events = Number((u as any).events ?? 0);
+    verifications = Number((u as any).verifications ?? 0);
+    mined = Number((u as any).mined ?? 0);
+    users_7d = Number((u as any).users_7d ?? 0);
+    events_7d = Number((u as any).events_7d ?? 0);
+  } catch {
+    // fallback: query totals only (older DB without 7d window)
+    try {
+      const [u2] = await sql<{ users: number; events: number; verifications: number; mined: number }[]>`
+        SELECT (SELECT count(*)::int FROM physi_users) AS users,
+          (SELECT count(*)::int FROM physi_events) AS events,
+          (SELECT count(*)::int FROM physi_verifications) AS verifications,
+          (SELECT count(*)::int FROM physi_mining_logs) AS mined`;
+      users = Number((u2 as any).users ?? 0);
+      events = Number((u2 as any).events ?? 0);
+      verifications = Number((u2 as any).verifications ?? 0);
+      mined = Number((u2 as any).mined ?? 0);
+    } catch {}
+  }
   const byStatus = await sql<{ status: string; c: number }[]>`
-    SELECT status, count(*)::int AS c FROM physi_events GROUP BY status`;
+    SELECT status, count(*)::int AS c FROM physi_events GROUP BY status`.catch(() => [] as any);
   const events_by_status: Record<string, number> = {};
-  for (const r of byStatus) events_by_status[r.status] = r.c;
-  return { users: u.users, events: u.events, verifications: u.verifications, mined: u.mined, events_by_status };
+  for (const r of byStatus as any[]) events_by_status[(r as any).status] = Number((r as any).c);
+  return { users, events, verifications, mined, events_by_status, users_7d, events_7d, users_new_7d: users_7d, events_new_7d: events_7d } as any;
 }
 
 export async function echoStrength(event_id: string) {
