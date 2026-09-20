@@ -104,13 +104,13 @@ function heatFromSlips(slips: Slip[]): { heat: Record<string,number>, hottest: s
 }
 
 /* sparkline: tiny SVG + mini timeline — no DB, purely tx_counts
-   Bend spec in bend/Emit.bend / UI.bend (parallel grid_cells) is the
+   Bend spec in bend/Emit.bend (parallel per-block counts) is the
    specification; TS below is the runtime (Array.map sequential placeholder,
    additive, no new tables). Bend verified via `bend --check-only`. */
 function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: boolean }) {
   const last5 = blocks.slice(0, 5);
   // chronological left->right = oldest to newest
-  // NOTE: Bend spec (UI.bend grid_cells) is the parallel specification;
+  // NOTE: Bend spec (Emit.bend counts) is the parallel specification;
   // TS Array.map below is the runtime — additive, no new tables.
   const ordered = [...last5].reverse();
   const counts = ordered.map((b) => Math.max(0, b.tx_count ?? 0));

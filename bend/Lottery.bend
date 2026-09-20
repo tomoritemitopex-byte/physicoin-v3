@@ -1,20 +1,41 @@
 import Base
 
-# Lottery — simple parallel lottery: each ticket maps in parallel
-# Demonstrates Bend's parallel evaluation via `bend` (parallel let)
-# Takes List Nat (tickets), returns List Nat (drawn winners)
+# Lottery — lowest-wins selection (Bend spec, TS runtime).
+# Doctrine from lib/proof-engine.ts: "Lottery (v1): eligibility + lowest
+# ticket wins. Ticket = Argon2id over (challenge, nonce) — lowest wins the round."
+# This is the parallel specification, verified via `bend --check-only`;
+# TS (proof-engine.ts mineLottery + rounds.ts) is authoritative.
+# Bend is the spec, not the runtime: `bend build` emits a runnable program,
+# not an importable library. Empty-list sentinel is 0n (no tickets).
+# Single-pass min fold — both head and tail conceptually evaluate in parallel
+# via structural recursion; no List duplication needed.
 
-def lottery_step(h: Nat) -> Nat:
-  Nat.add(h, 1n)
+def min_pick(c: Cmp, +a: Nat, +b: Nat) -> Nat:
+  match c:
+    case LT{}:
+      a
+    case EQ{}:
+      a
+    case GT{}:
+      b
 
-def lottery(xs: List<Nat>) -> List<Nat>:
+def min_of(+a: Nat, +b: Nat) -> Nat:
+  min_pick(Nat.cmp(a, b), a, b)
+
+def lottery_min(xs: List<Nat>) -> Nat:
   match xs:
     case Nil{}:
-      Nil{}
+      0n
     case Con{h, t}:
-      a b = lottery_step(h) lottery(t)
-      a <> b
+      match t:
+        case Nil{}:
+          h
+        case Con{_t_head, _t_tail}:
+          min_of(h, lottery_min(t))
+
+def lottery(xs: List<Nat>) -> Nat:
+  lottery_min(xs)
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    IO.print("Lottery ready — parallel draw: List Nat -> List Nat via bend")
+    IO.print("Lottery ready — lowest wins: List<Nat> -> Nat via min fold (TS: lowest ticket wins)")
