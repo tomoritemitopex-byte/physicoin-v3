@@ -1,7 +1,12 @@
 import Base
 
-# Physicoin — whole product as one parallel Bend program
-# Vibe-coded mess → one container where crowd builds truth
+# Physicoin — module index for the Bend spec layer (Bend spec, TS runtime).
+# Real logic lives per module: Score.bend (Latin row/col fork-join),
+# Derive.bend (per-nonce LCG + fan-out), Lottery.bend (lowest-wins fold),
+# Face.bend (parallel cell transform), Emit.bend (heat/count spec).
+# The defs below are unimplemented surface placeholders (identity stubs),
+# kept so `bend --check-only` gates the file in scripts/bend-check.sh.
+# TS (lib/proof-engine.ts, app/) is authoritative.
 
 def score(n: Nat) -> Nat:
   Zero{}
@@ -20,4 +25,4 @@ def mine_round(round: Nat, wallets: Nat) -> Nat:
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    IO.print("Physicoin in Bend — timetable is mempool, mining locks blocks, chain is timetable. No Next.js, just parallel grids. The 4.8G node now grinds on GPU.")
+    IO.print("Physicoin in Bend — timetable is mempool, mining locks blocks, chain is timetable. Bend is the parallel spec; TS is the runtime.")
