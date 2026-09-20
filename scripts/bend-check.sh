@@ -22,7 +22,7 @@ if [ ! -x "$BEND_BIN" ]; then
 fi
 
 FAILED=0
-for f in "$HOME/physicoin-bend/Physicoin.bend" "$HOME/physicoin-bend/UI.bend" "$HOME/physicoin-bend/Builder.bend" "$HOME/physicoin-bend/Clean.bend" ./bend/Builder.bend ./bend/Physicoin.bend ./bend/UI.bend ./bend/Clean.bend ./bend/Showcase.bend; do
+for f in "$HOME/physicoin-bend/Physicoin.bend" "$HOME/physicoin-bend/UI.bend" "$HOME/physicoin-bend/Builder.bend" "$HOME/physicoin-bend/Clean.bend" ./bend/Builder.bend ./bend/Physicoin.bend ./bend/UI.bend ./bend/Clean.bend ./bend/Showcase.bend ./bend/Emit.bend; do
   if [ -f "$f" ]; then
     echo "[bend-check] checking $f ..."
     if ! "$BEND_BIN" --check-only "$f" 2>&1; then
