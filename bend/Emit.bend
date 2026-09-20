@@ -1,9 +1,9 @@
 import Base
 
-# Emit — Bend → JS for Next.js import (hall heat + grid score)
-# Trivial, deterministic, parallel-ready: compiled via `bend build bend/Emit.bend -o <out>.js`
-# Next.js can `import { hall_heat, grid_score } from "@/bend/Emit.js"` once emitted.
-# Keep fallback JS in page.tsx until wired.
+# Emit — Bend spec for hall heat + grid score (TS runtime).
+# Bend is the parallel specification, verified via `bend --check-only`;
+# `bend build` emits a runnable program, not an importable library.
+# TS in page.tsx is authoritative.
 
 def grid_score(n: Nat) -> Nat:
   0n

@@ -1,12 +1,12 @@
 import Base
 
-# Face — parallel UI generator: List<String> -> List<String> via Bend
+# Face — parallel UI generator (Bend spec, TS runtime).
 # Each cell (hall name) is mapped to a styled slip representation in parallel
 # (HVM/CUDA fork-join: `a b = f(head) face_cells(tail)`). Stub prefixes "◆ ".
-# Build via `bend build bend/Face.bend -o /tmp/face.js` (mirrored to bend/Face.js)
-# and import as `import { face_cells } from "@/bend/Face.js"` once emitted.
-# Verifies with `bend --check-only bend/Face.bend`.
-# Keep JS fallback in app/app/board/page.tsx until import is wired.
+# Bend is the parallel specification, verified via `bend --check-only
+# bend/Face.bend` and executable via `bend run` for demos; TS remains the
+# runtime. Build emits a runnable program (`bend build -o /tmp/face.js`),
+# not an importable library — see bend/Face.js header.
 
 def face_cells(cells: List<String>) -> List<String>:
   match cells:
