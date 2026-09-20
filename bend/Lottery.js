@@ -143,7 +143,7 @@ return {
 // =======
 
 function $main$() {
-  return (x_0) => $IO$print$("Lottery ready — parallel draw: List Nat -> List Nat via bend", x_0);
+  return (x_0) => $IO$print$("Lottery ready — lowest wins: List<Nat> -> Nat via min fold (TS: lowest ticket wins)", x_0);
 }
 
 function $IO$print$(text_0, k_0) {
