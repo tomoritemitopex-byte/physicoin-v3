@@ -128,4 +128,29 @@ else
   fi
 fi
 
+# --- Face: parallel UI generator (List String -> List String via bend) ---
+SRC_FACE="bend/Face.bend"
+OUT_FACE="/tmp/face.js"
+OUT_FACE_PROJ="bend/Face.js"
+
+if [ ! -f "$SRC_FACE" ]; then
+  echo "[bend-emit] WARN: $SRC_FACE not found — skipping face emit" >&2
+else
+  echo "[bend-emit] building $SRC_FACE -> $OUT_FACE ..."
+  if ! ( "$BEND_BIN" build "$SRC_FACE" -o "$OUT_FACE" 2>&1 || "$BEND_BIN" "$SRC_FACE" -o "$OUT_FACE" 2>&1 ); then
+    echo "[bend-emit] WARN: bend build failed for $SRC_FACE — skipping (not blocking build)" >&2
+  else
+    if [ -f "$OUT_FACE" ]; then
+      echo "[bend-emit] ok: $OUT_FACE exists ($(wc -c < "$OUT_FACE" | tr -d ' ') bytes)"
+    else
+      echo "[bend-emit] WARN: expected output $OUT_FACE not found — skipping" >&2
+    fi
+    if [ -f "$OUT_FACE" ] && cp "$OUT_FACE" "$OUT_FACE_PROJ" 2>/dev/null; then
+      echo "[bend-emit] mirrored to $OUT_FACE_PROJ"
+    fi
+    mkdir -p lib 2>/dev/null || true
+    cp "$OUT_FACE" "lib/bendFace.js" 2>/dev/null || true
+  fi
+fi
+
 echo "[bend-emit] done"

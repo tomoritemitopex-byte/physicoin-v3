@@ -816,13 +816,17 @@ export default function BoardPage() {
                   <p className="mt-1 font-mono text-xs text-ink/50">Be first — tap Post a slip above.</p>
                 </div>
               ) : (
+                // Bend Face parallel UI generator (conceptual) — this sequential Array.map *could* be Bend-emitted:
+                //   import { face_cells } from "@/bend/Face.js" // produced by `bend build bend/Face.bend -o /tmp/face.js` via scripts/bend-emit.sh
+                //   // face_cells(cells: List<String>) -> List<String> transforms each hall name to "◆ <hall>" in parallel via bend `a b = f(h) face_cells(t)`
+                // Current JS below is fallback and stays active — additive, no new tables. Keep JS until Bend JS import is wired.
                 slips.map((s) => (
-                  <div key={s.id} className="slip p-4 pt-5">
+                  <div key={s.id} className="slip p-4 pt-5 transition-transform duration-200 hover:scale-[1.015] hover:shadow-lg">
                     <p className="tnum font-mono text-[11px] text-ink/50">
                       {String(s.event_time).slice(0, 5)} · {String(s.event_date).slice(0, 10)} · {s.status === "verified" ? "✓ confirmed" : "pending"}
                     </p>
-                    <p className="font-display mt-0.5 text-[15px] font-bold leading-snug">{s.venue}</p>
-                    <p className="text-[13px] leading-snug text-ink/75">{s.title}</p>
+                    <p className="font-display mt-0.5 text-[15px] font-black leading-snug tracking-tight">{s.venue}</p>
+                    <p className="text-[13px] font-semibold leading-snug text-ink/80">{s.title}</p>
                     <p className="mt-1 font-mono text-[10px] text-ink/40">
                       {s.scope_type}
                       {s.scope_value ? ` · ${s.scope_value}` : ""}
