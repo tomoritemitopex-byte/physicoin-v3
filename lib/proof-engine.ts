@@ -62,6 +62,11 @@ function lineConflicts(vals: number[]): number {
   return vals.length - bits;
 }
 
+// Bend-emitted (conceptual): this logic could be compiled from bend/Score.bend
+// latin_score(cells: List<Nat>, n: Nat) -> Nat demonstrates parallel row/col
+// conflict checking via Bend fork-join (`a b = ...` + `Nat.add`). Build via
+// `bend build bend/Score.bend -o /tmp/score.js` (mirrored to bend/Score.js).
+// JS below is the authoritative fallback until the Bend GPU path is wired.
 export function scoreGrid(g: Grid): number {
   const n = g.n;
   let total = 0;

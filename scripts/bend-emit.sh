@@ -78,4 +78,29 @@ else
   fi
 fi
 
+# --- Score: parallel Latin grid scorer (List Nat, Nat -> Nat via bend) ---
+SRC_SCORE="bend/Score.bend"
+OUT_SCORE="/tmp/score.js"
+OUT_SCORE_PROJ="bend/Score.js"
+
+if [ ! -f "$SRC_SCORE" ]; then
+  echo "[bend-emit] WARN: $SRC_SCORE not found — skipping score emit" >&2
+else
+  echo "[bend-emit] building $SRC_SCORE -> $OUT_SCORE ..."
+  if ! ( "$BEND_BIN" build "$SRC_SCORE" -o "$OUT_SCORE" 2>&1 || "$BEND_BIN" "$SRC_SCORE" -o "$OUT_SCORE" 2>&1 ); then
+    echo "[bend-emit] WARN: bend build failed for $SRC_SCORE — skipping (not blocking build)" >&2
+  else
+    if [ -f "$OUT_SCORE" ]; then
+      echo "[bend-emit] ok: $OUT_SCORE exists ($(wc -c < "$OUT_SCORE" | tr -d ' ') bytes)"
+    else
+      echo "[bend-emit] WARN: expected output $OUT_SCORE not found — skipping" >&2
+    fi
+    if [ -f "$OUT_SCORE" ] && cp "$OUT_SCORE" "$OUT_SCORE_PROJ" 2>/dev/null; then
+      echo "[bend-emit] mirrored to $OUT_SCORE_PROJ"
+    fi
+    mkdir -p lib 2>/dev/null || true
+    cp "$OUT_SCORE" "lib/bendScore.js" 2>/dev/null || true
+  fi
+fi
+
 echo "[bend-emit] done"
