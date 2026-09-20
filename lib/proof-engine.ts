@@ -109,12 +109,12 @@ export function barCap(order: number): number {
   return Math.max(8, Math.floor(maxScoreForOrder(order) / 6));
 }
 
-// Bend-emitted (conceptual): this derive could be compiled from bend/Derive.bend
-// via `derive_parallel(challenge: String, nonces: List<Nat>) -> List<Nat>` which
-// parallel-maps per-nonce derivation on HVM/CUDA (`a b = f(h) g(t)` fork-join).
-// Stub there is nonce*2; real path would embed SHA256+SplitMix64+hill-climb.
-// Build via `bend build bend/Derive.bend -o /tmp/derive.js`. TS remains
-// authoritative until the Bend GPU path is wired.
+// Bend-emitted: derive_parallel in bend/Derive.bend parallel-maps per-nonce
+// derivation on HVM/CUDA (`a b = f(h) g(t)` fork-join) via an LCG mixer
+// (1664525·state + 1013904223 mod 2^32, seeded from challenge length + nonce).
+// SHA256 + SplitMix64 + 1500-step hill-climb stay authoritative here in TS;
+// Bend owns the deterministic per-nonce LCG + fan-out. Build via
+// `bend build bend/Derive.bend -o /tmp/derive.js`.
 export function derive(challenge: string, nonce: number, n: number): Grid {
   const enc = new TextEncoder().encode(challenge);
   const prg = seedPrg(enc, BigInt(nonce));

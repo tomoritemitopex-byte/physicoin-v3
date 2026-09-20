@@ -143,7 +143,7 @@ return {
 // =======
 
 function $main$() {
-  return (x_0) => $IO$print$("Derive ready — derive_parallel: String, List<Nat> -> List<Nat> via parallel bend (per-nonce grid stub)", x_0);
+  return (x_0) => $IO$print$("Derive ready — derive_parallel: String, List<Nat> -> List<Nat> via LCG + parallel bend", x_0);
 }
 
 function $IO$print$(text_0, k_0) {
