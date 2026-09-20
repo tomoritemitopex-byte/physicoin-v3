@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bend-check.sh — lightweight pre-build Bend validation
-# Runs `bend --check-only` on ~/physicoin-bend/Physicoin.bend and UI.bend if they exist.
+# Runs `bend --check-only` on ~/physicoin-bend/Physicoin.bend, UI.bend, Builder.bend and Clean.bend if they exist.
 # Fails the build if they don't check. Warns (not fails) if bend is not installed.
 set -e
 
@@ -22,7 +22,7 @@ if [ ! -x "$BEND_BIN" ]; then
 fi
 
 FAILED=0
-for f in "$HOME/physicoin-bend/Physicoin.bend" "$HOME/physicoin-bend/UI.bend"; do
+for f in "$HOME/physicoin-bend/Physicoin.bend" "$HOME/physicoin-bend/UI.bend" "$HOME/physicoin-bend/Builder.bend" "$HOME/physicoin-bend/Clean.bend"; do
   if [ -f "$f" ]; then
     echo "[bend-check] checking $f ..."
     if ! "$BEND_BIN" --check-only "$f" 2>&1; then
