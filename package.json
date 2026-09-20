@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/migrate.mjs && next build",
+    "build": "bash scripts/bend-check.sh && node scripts/migrate.mjs && next build",
     "migrate": "node scripts/migrate.mjs",
     "seed": "node scripts/seed.mjs",
     "check": "node scripts/check.mjs",

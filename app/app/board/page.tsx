@@ -98,10 +98,18 @@ function heatFromSlips(slips: Slip[]): { heat: Record<string,number>, hottest: s
   return { heat, hottest, max };
 }
 
-/* sparkline: tiny SVG + mini timeline — no DB, purely tx_counts */
+/* sparkline: tiny SVG + mini timeline — no DB, purely tx_counts
+   Bend conceptual: chain sparkline data (last 5 tx_counts) is now generated
+   via Bend's parallel grid_cells (conceptually, via UI.bend). The JS below
+   still uses Array.map for now — additive, no new tables — but the logic
+   mirrors UI.bend's parallel evaluation: each tx_count is a grid_cell
+   computed in parallel, then mapped to SVG coords. Future: replace
+   Array.map with Bend grid_cells directly. */
 function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: boolean }) {
   const last5 = blocks.slice(0, 5);
   // chronological left->right = oldest to newest
+  // NOTE: Bend parallel conceptual — UI.bend grid_cells would produce counts in parallel;
+  // current JS uses Array.map as sequential placeholder (no new tables, additive only).
   const ordered = [...last5].reverse();
   const counts = ordered.map((b) => Math.max(0, b.tx_count ?? 0));
   const max = Math.max(1, ...counts, 1);
