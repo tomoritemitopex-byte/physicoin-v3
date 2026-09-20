@@ -1,5 +1,10 @@
 import Base
 
+# Showcase — doctrine record (Bend spec, TS runtime). The strings below ARE the
+# content (grid/ticket doctrine); good_score Zero{} records "score 0 wins" —
+# the exhibition bar the real validator (Score.bend) and TS (proof-engine.ts)
+# enforce. No logic to wire; verified via `bend --check-only`.
+
 def good_score() -> Nat:
   Zero{}
 
