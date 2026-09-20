@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # bend-check.sh — lightweight pre-build Bend validation
-# Runs `bend --check-only` on ~/physicoin-bend/Physicoin.bend, UI.bend, Builder.bend and Clean.bend if they exist.
-# Fails the build if they don't check. Warns (not fails) if bend is not installed.
+# Runs `bend --check-only` on the upstream four (if present) plus ALL local
+# bend/*.bend modules (Builder, Physicoin, UI, Clean, Showcase, Emit, Score,
+# Derive, Lottery, Face, Elvenar, ElvenerFace). Upstream src/Consensus.bend is
+# deliberately not gated (broken, ownership unclear — see audit notes).
+# Fails the build if any gated file doesn't check. Warns (not fails) if bend
+# is not installed.
 set -e
 
 BEND_BIN="${BEND_BIN:-$HOME/.cargo/bin/bend}"
@@ -22,7 +26,7 @@ if [ ! -x "$BEND_BIN" ]; then
 fi
 
 FAILED=0
-for f in "$HOME/physicoin-bend/Physicoin.bend" "$HOME/physicoin-bend/UI.bend" "$HOME/physicoin-bend/Builder.bend" "$HOME/physicoin-bend/Clean.bend" ./bend/Builder.bend ./bend/Physicoin.bend ./bend/UI.bend ./bend/Clean.bend ./bend/Showcase.bend ./bend/Emit.bend; do
+for f in "$HOME/physicoin-bend/Physicoin.bend" "$HOME/physicoin-bend/UI.bend" "$HOME/physicoin-bend/Builder.bend" "$HOME/physicoin-bend/Clean.bend" ./bend/Builder.bend ./bend/Physicoin.bend ./bend/UI.bend ./bend/Clean.bend ./bend/Showcase.bend ./bend/Emit.bend ./bend/Score.bend ./bend/Derive.bend ./bend/Lottery.bend ./bend/Face.bend ./bend/Elvenar.bend ./bend/ElvenerFace.bend; do
   if [ -f "$f" ]; then
     echo "[bend-check] checking $f ..."
     if ! "$BEND_BIN" --check-only "$f" 2>&1; then
