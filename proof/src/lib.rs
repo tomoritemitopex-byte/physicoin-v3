@@ -196,6 +196,12 @@ fn shuffled_row<const N: usize>(prg: &mut SplitMix64) -> [u8; 64] {
     row
 }
 
+// Bend-emitted (conceptual): this derive could be compiled from bend/Derive.bend
+// via `derive_parallel(challenge: String, nonces: List<Nat>) -> List<Nat>` which
+// parallel-maps per-nonce derivation on HVM/CUDA (`a b = f(h) g(t)` fork-join).
+// Stub there is nonce*2; real path would embed SHA256+SplitMix64+hill-climb.
+// Build via `bend build bend/Derive.bend -o /tmp/derive.js`. Rust/TS remain
+// authoritative until the Bend GPU path is wired.
 fn derive<const N: usize>(challenge: &[u8], nonce: u64) -> Grid<N> {
     let mut prg = seed_prg(challenge, nonce);
     let mut rank = [[0u8; 64]; 64];

@@ -103,4 +103,29 @@ else
   fi
 fi
 
+# --- Derive: parallel derive (String, List Nat -> List Nat via bend) ---
+SRC_DERIVE="bend/Derive.bend"
+OUT_DERIVE="/tmp/derive.js"
+OUT_DERIVE_PROJ="bend/Derive.js"
+
+if [ ! -f "$SRC_DERIVE" ]; then
+  echo "[bend-emit] WARN: $SRC_DERIVE not found — skipping derive emit" >&2
+else
+  echo "[bend-emit] building $SRC_DERIVE -> $OUT_DERIVE ..."
+  if ! ( "$BEND_BIN" build "$SRC_DERIVE" -o "$OUT_DERIVE" 2>&1 || "$BEND_BIN" "$SRC_DERIVE" -o "$OUT_DERIVE" 2>&1 ); then
+    echo "[bend-emit] WARN: bend build failed for $SRC_DERIVE — skipping (not blocking build)" >&2
+  else
+    if [ -f "$OUT_DERIVE" ]; then
+      echo "[bend-emit] ok: $OUT_DERIVE exists ($(wc -c < "$OUT_DERIVE" | tr -d ' ') bytes)"
+    else
+      echo "[bend-emit] WARN: expected output $OUT_DERIVE not found — skipping" >&2
+    fi
+    if [ -f "$OUT_DERIVE" ] && cp "$OUT_DERIVE" "$OUT_DERIVE_PROJ" 2>/dev/null; then
+      echo "[bend-emit] mirrored to $OUT_DERIVE_PROJ"
+    fi
+    mkdir -p lib 2>/dev/null || true
+    cp "$OUT_DERIVE" "lib/bendDerive.js" 2>/dev/null || true
+  fi
+fi
+
 echo "[bend-emit] done"
