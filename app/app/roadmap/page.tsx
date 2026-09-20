@@ -1,5 +1,6 @@
 import RoadStatic from "@/components/road/RoadStatic";
 import RoadClient from "@/components/road/RoadClient";
+import CampusCanvas from "@/components/road/CampusCanvas";
 import { listEvents } from "@/lib/domains/events";
 
 // Live feed every request: events change by the minute, never cached.
@@ -24,6 +25,13 @@ export default async function RoadmapPage() {
       <div className="relative min-h-[120vh] overflow-hidden rounded-3xl bg-gradient-to-b from-sky to-green-50 px-2">
         <RoadStatic />
         <RoadClient events={events} />
+      </div>
+      <div className="mt-8">
+        <h2 className="font-display text-xl font-bold">Campus City — Elvenar Face, Physicoin Heart</h2>
+        <p className="mt-1 text-sm text-ink/60">HTML5 Canvas + Y-sorted sprites — the timetable as a glowing city. Bend chose JS for web, C for native, one engine.</p>
+        <div className="mt-4">
+          <CampusCanvas />
+        </div>
       </div>
     </div>
   );
