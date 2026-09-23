@@ -370,7 +370,11 @@ export async function roundWins(user_id: string, limit = 20) {
     WHERE winner_user_id = ${user_id} ORDER BY number DESC LIMIT ${Math.min(limit, 50)}`;
 }
 
-export async function miningDashboard(user_id: string) {
+export async function miningDashboard(user_id: string, token?: string) {
+  if (token) {
+    const { user_id: owner } = await validateSession(token);
+    if (owner !== user_id) throw new DomainError("NOT_YOUR_WALLET", "This session cannot view that wallet.", 403);
+  }
   const sql = getDb();
   const users = await sql<{ mining_balance: string; display_name: string | null }[]>`
     SELECT mining_balance::text, display_name FROM physi_users WHERE id = ${user_id} LIMIT 1`;

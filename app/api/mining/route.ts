@@ -15,7 +15,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, ...(await currentRound()) });
     }
     if (user_id) {
-      return NextResponse.json({ ok: true, ...(await miningDashboard(user_id)) });
+      const h = req.headers.get("authorization") || "";
+      const token = h.startsWith("Bearer ") ? h.slice(7) : "";
+      if (!token) {
+        return NextResponse.json({ ok: false, code: "NO_TOKEN", message: "Wallet session required." }, { status: 401 });
+      }
+      return NextResponse.json({ ok: true, ...(await miningDashboard(user_id, token)) });
     }
     return NextResponse.json({ ok: true, ...(await currentRound()) });
   } catch (e) {
@@ -34,7 +39,10 @@ export async function POST(req: Request) {
     if (!token) {
       return NextResponse.json({ ok: false, code: "NO_TOKEN", message: "Wallet session required — fetch one from /api/auth/session first." }, { status: 401 });
     }
-    if (body.nonce !== undefined && body.grid_hex && body.score !== undefined) {
+    if (body.nonce !== undefined || body.grid_hex || body.score !== undefined) {
+      if (!Number.isInteger(body.round) || !Number.isInteger(body.nonce) || typeof body.grid_hex !== "string" || !Number.isInteger(body.score)) {
+        return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "round, nonce, grid_hex, and score are required for proof recording." }, { status: 400 });
+      }
       const res = await recordProof(body.user_id, body.round, body.nonce, body.grid_hex, body.score, body.salt || "", token, body.ticket_hex || "", body.version || 1);
       return NextResponse.json({ ok: true, recorded: true, ...res }, { status: 201 });
     }
