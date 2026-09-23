@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPods, createPodForEvent } from "@/lib/domains/pods";
 import { toErrorResponse } from "@/lib/errors";
+import { validateSession } from "@/lib/domains/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,8 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/pods  { event_id } — create pod for a verified event (internal only).
- * Normally called server-side from votes.ts after quorum; this route exists for
- * ops / manual backfill. Requires a valid session (any authenticated wallet).
+ * POST /api/pods  { event_id } — create pod for a verified event.
+ * Requires a valid session token.
  */
 export async function POST(req: Request) {
   try {
@@ -35,13 +35,12 @@ export async function POST(req: Request) {
     if (!event_id) {
       return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "event_id is required." }, { status: 400 });
     }
-    // Internal-only guard: require a session token if present; if DB not configured, fail gracefully via toErrorResponse
     const h = req.headers.get("authorization") || "";
     const token = body.token || (h.startsWith("Bearer ") ? h.slice(7) : "");
-    if (token) {
-      const { validateSession } = await import("@/lib/domains/auth");
-      await validateSession(token);
+    if (!token) {
+      return NextResponse.json({ ok: false, code: "NO_TOKEN", message: "Wallet session required." }, { status: 401 });
     }
+    await validateSession(token);
     const pod = await createPodForEvent(event_id);
     if (!pod) {
       return NextResponse.json({ ok: false, code: "NO_POD", message: "No YES verifiers or pod already exists." }, { status: 409 });

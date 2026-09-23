@@ -39,13 +39,20 @@ export async function send(input: {
   }
   const net = Math.round((amount - fee) * 100) / 100;
   // Atomic: debit + credit + ledger land together or not at all.
-  // (Double-spend race closed: concurrent sends serialize on the row.)
+  // Row-level balance guard prevents double-spend races.
   await sql.begin(async (tx: any) => {
-    await tx`UPDATE physi_users SET mining_balance = mining_balance - ${amount} WHERE id = ${input.from_user_id}`;
+    const updated = await tx<{ b: string }[]>`
+      UPDATE physi_users
+      SET mining_balance = mining_balance - ${amount}
+      WHERE id = ${input.from_user_id} AND mining_balance >= ${amount}
+      RETURNING mining_balance::text AS b`;
+    if (!updated[0]) {
+      throw new DomainError("INSUFFICIENT_COINS", "Not enough $PHY in this wallet.", 409);
+    }
     await tx`UPDATE physi_users SET mining_balance = LEAST(10000, mining_balance + ${net}) WHERE id = ${input.to_user_id}`;
     await tx`
-      INSERT INTO physi_transfers (from_user, to_user, amount, memo)
-      VALUES (${input.from_user_id}, ${input.to_user_id}, ${net}, ${String(input.memo || "").slice(0, 140)})`;
+      INSERT INTO physi_transfers (from_user, to_user, amount, fee, memo)
+      VALUES (${input.from_user_id}, ${input.to_user_id}, ${amount}, ${fee}, ${String(input.memo || "").slice(0, 140)})`;
   });
   const [t] = await sql`
     SELECT id, amount, created_at FROM physi_transfers
@@ -57,7 +64,7 @@ export async function send(input: {
 export async function history(user_id: string, limit = 20) {
   const sql = getDb();
   return await sql`
-    SELECT id, from_user, to_user, amount, memo, created_at FROM physi_transfers
+    SELECT id, from_user, to_user, amount, fee, memo, created_at FROM physi_transfers
     WHERE from_user = ${user_id} OR to_user = ${user_id}
     ORDER BY created_at DESC LIMIT ${Math.min(limit, 50)}`;
 }

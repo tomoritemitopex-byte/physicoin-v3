@@ -80,6 +80,8 @@ export async function validateSession(token: string): Promise<{ user_id: string 
   const jti = createHmac("sha256", secret()).update(token).digest("hex");
   const revoked = await sql`SELECT jti FROM physi_revoked_tokens WHERE jti = ${jti} LIMIT 1`;
   if (revoked[0]) throw new DomainError("REVOKED", "Session was signed out.", 401);
+  const user = await sql`SELECT id FROM physi_users WHERE id = ${user_id} LIMIT 1`;
+  if (!user[0]) throw new DomainError("BAD_TOKEN", "Wallet no longer exists.", 401);
   return { user_id };
 }
 
