@@ -76,14 +76,18 @@ export default function MiningPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [bounce, setBounce] = useState(false);
+  const [mineState, setMineState] = useState<"idle" | "working" | "success" | "error">("idle");
 
   const load = useCallback(
-    async (id: string) => {
+    async (id: string, token = session) => {
       setLoadError("");
       try {
         const [roundRes, dashRes] = await Promise.all([
           fetch("/api/mining?round=current", { cache: "no-store" }),
-          fetch(`/api/mining?user_id=${encodeURIComponent(id)}`, { cache: "no-store" }),
+          fetch(`/api/mining?user_id=${encodeURIComponent(id)}`, {
+            cache: "no-store",
+            headers: { authorization: `Bearer ${token}` },
+          }),
         ]);
         const current = await roundRes.json();
         const dash = await dashRes.json();
@@ -103,7 +107,7 @@ export default function MiningPage() {
         setLoading(false);
       }
     },
-    []
+    [session]
   );
 
   useEffect(() => {
@@ -115,7 +119,7 @@ export default function MiningPage() {
       setUid(id);
       setSession(tok);
       setHandle(p?.nickname || "");
-      if (id) load(id).catch(() => undefined);
+      if (id) load(id, tok).catch(() => undefined);
       else
         fetch("/api/mining?round=current", { cache: "no-store" })
           .then((r) => r.json())
@@ -153,10 +157,10 @@ export default function MiningPage() {
     return () => clearInterval(iv);
   }, [load, uid]);
   useEffect(() => {
-    if (!uid) return;
-    const iv = setInterval(() => load(uid).catch(() => undefined), 15000);
+    if (!uid || !session) return;
+    const iv = setInterval(() => load(uid, session).catch(() => undefined), 15000);
     return () => clearInterval(iv);
-  }, [load, uid]);
+  }, [load, uid, session]);
 
   async function mine() {
     if (!uid || !session) {
@@ -170,6 +174,7 @@ export default function MiningPage() {
       return;
     }
     setBusy(true);
+    setMineState("working");
     setMsgKind("info");
     setMessage("Finding your best ticket…");
     try {
@@ -189,15 +194,17 @@ export default function MiningPage() {
         if (code === "TOO_WEAK") throw new Error("Too weak for the bar — try again, luck resets every tap.");
         throw new Error(j.message || "No ticket this time — try again.");
       }
+      setMineState("success");
       setMsgKind("success");
-      setMessage(`Locked in for round ${j.round ?? round?.round ?? "—"} — nice tap.`);
+      setMessage(`Locked in for round ${j.round ?? round?.round ?? "—"} — ticket saved to your wallet.`);
       setBounce(true);
       playJuice();
       setTimeout(() => setBounce(false), 650);
       await load(uid);
     } catch (e) {
+      setMineState("error");
       setMsgKind("error");
-      setMessage(e instanceof Error ? e.message : "Mining failed. Tap again.");
+      setMessage(e instanceof Error ? e.message : "Mining failed. Retry when ready.");
     } finally {
       setBusy(false);
     }
@@ -348,6 +355,7 @@ export default function MiningPage() {
               <button
                 onClick={mine}
                 disabled={!canMine}
+                aria-busy={mineState === "working"}
                 className={`flex w-full items-center justify-center gap-3 rounded-full px-6 py-4 text-[15px] font-black transition ${canMine ? "bg-ink text-white hover:bg-accent hover:shadow-lg active:scale-[0.98]" : "cursor-not-allowed bg-ink/10 text-ink/40"}`}
               >
                 <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-sm">⛏</span>
