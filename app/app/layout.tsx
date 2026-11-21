@@ -1,27 +1,27 @@
+import Link from "next/link";
+
+const links = [
+  ["Home", "/app/game"], ["Schedule", "/app/schedule"], ["Community", "/app/board"], ["Mining", "/app/mining"], ["Network", "/app/ecosystem"], ["Profile", "/app/profile"],
+];
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-ink/10 bg-white/80 px-4 py-3 backdrop-blur">
-        <a href="/" className="font-display text-xl font-black tracking-tight">
-          PhysiCoin
-        </a>
-        <nav className="flex gap-4 text-sm font-semibold">
-          <a href="/app/game" className="rounded-full bg-cyan-500 px-3 py-1 text-slate-900">Game</a>
-          <a href="/app/ecosystem">Ecosystem</a>
-          <a href="/app/roadmap">Road</a>
-          <a href="/app/schedule">Timetable</a>
-          <a href="/app/mining">Mining</a>
-          <a href="/app/profile">Profile</a>
-        </nav>
+    <div className="min-h-screen bg-[#07110f] text-[#edf8f1]">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#07110f]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2 text-sm font-black tracking-[.16em]">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-200/35 bg-emerald-200/10 font-display text-emerald-200">P</span>
+            PHYSICOIN
+          </Link>
+          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+            {links.map(([label, href]) => <Link key={href} href={href} className="rounded-full px-3 py-2 text-sm font-bold text-white/55 transition hover:bg-white/5 hover:text-white">{label}</Link>)}
+          </nav>
+          <Link href="/app/profile" className="rounded-full border border-white/15 px-3 py-2 text-xs font-bold text-white/75">Wallet</Link>
+        </div>
       </header>
-      <main>{children}</main>
-      <nav className="fixed bottom-0 left-0 right-0 flex justify-center gap-5 border-t border-sky/30 bg-white/95 py-3 text-sm font-bold">
-        <a href="/app/game" className="rounded-full bg-cyan-500 px-3 py-1 text-slate-900">Game</a>
-        <a href="/app/ecosystem">Network</a>
-        <a href="/app/roadmap">Road</a>
-        <a href="/app/schedule">Table</a>
-        <a href="/app/mining">Mine</a>
-        <a href="/app/profile">Profile</a>
+      <main className="min-h-[calc(100vh-4rem)] pb-24 md:pb-8">{children}</main>
+      <nav className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-5 rounded-2xl border border-white/10 bg-[#0e1c19]/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl md:hidden" aria-label="Mobile navigation">
+        {links.slice(0, 5).map(([label, href]) => <Link key={href} href={href} className="rounded-xl px-1 py-2 text-center text-[11px] font-bold text-white/55 hover:bg-white/5 hover:text-emerald-200">{label}</Link>)}
       </nav>
     </div>
   );
