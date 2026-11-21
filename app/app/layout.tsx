@@ -6,7 +6,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           PhysiCoin
         </a>
         <nav className="flex gap-4 text-sm font-semibold">
-          <a href="/app/game" className="bg-cyan-500 text-slate-900 rounded-full px-3 py-1">Game</a>
+          <a href="/app/game" className="rounded-full bg-cyan-500 px-3 py-1 text-slate-900">Game</a>
+          <a href="/app/ecosystem">Ecosystem</a>
           <a href="/app/roadmap">Road</a>
           <a href="/app/schedule">Timetable</a>
           <a href="/app/mining">Mining</a>
@@ -15,11 +16,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
       <main>{children}</main>
       <nav className="fixed bottom-0 left-0 right-0 flex justify-center gap-5 border-t border-sky/30 bg-white/95 py-3 text-sm font-bold">
-        <a href="/app/game" className="bg-cyan-500 text-slate-900 rounded-full px-3 py-1">Game</a>
-        <a href="/app/roadmap">🛣 Road</a>
-        <a href="/app/schedule">📅 Table</a>
-        <a href="/app/mining">⛏ Mine</a>
-        <a href="/app/profile">👤 Profile</a>
+        <a href="/app/game" className="rounded-full bg-cyan-500 px-3 py-1 text-slate-900">Game</a>
+        <a href="/app/ecosystem">Network</a>
+        <a href="/app/roadmap">Road</a>
+        <a href="/app/schedule">Table</a>
+        <a href="/app/mining">Mine</a>
+        <a href="/app/profile">Profile</a>
       </nav>
     </div>
   );
