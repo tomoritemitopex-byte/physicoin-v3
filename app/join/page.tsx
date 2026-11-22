@@ -80,62 +80,72 @@ function JoinInner() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 py-16 pb-24 text-center">
-      <p className="font-mono text-xs uppercase tracking-widest text-accent">Join the node</p>
-      <h1 className="font-display mt-3 text-3xl font-black tracking-tight">Race for the next coin.</h1>
+    <main className="mx-auto max-w-md px-5 py-14 pb-24">
+      <p className="kicker text-coral text-center">open door</p>
+      <h1 className="mt-3 text-center text-4xl sm:text-5xl">RACE FOR THE NEXT COIN.</h1>
+      <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink/45">
+        no charge · no lock-in · you keep what you mine
+      </p>
 
       {inviterId && (
-        <div className="slip mx-auto mt-4 max-w-sm rounded-2xl border border-forest/20 bg-forest/5 p-4 text-left">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-forest">Invite credit</p>
+        <div className="brutal-card brutal-card--lime mt-6 p-4">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink/60">Invite credit</p>
           {inviter ? (
             <>
-              <p className="font-display mt-1 text-base font-bold">Invited by @{inviter}</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink/60">
-                They&apos;ll earn <span className="font-bold text-forest">0.5 $PHY</span> when you win your first round — no cost to you, once per invitee, forever.
+              <p className="font-display mt-1 text-base">INVITED BY @{inviter}</p>
+              <p className="mt-1 text-sm leading-6 text-ink/70">
+                They&apos;ll earn <span className="font-bold">0.5 $PHY</span> when you win your first round — no cost to you, once per invitee, forever.
               </p>
             </>
           ) : (
             <>
-              <p className="font-display mt-1 text-base font-bold">Invite link detected</p>
+              <p className="font-display mt-1 text-base">INVITE LINK DETECTED</p>
               <p className="mt-1 font-mono text-xs text-ink/60">Inviter {inviterId.slice(0, 8)}… will be credited 0.5 $PHY on your first win.</p>
             </>
           )}
         </div>
       )}
 
-      <p className="mt-4 text-sm leading-relaxed text-ink/70">
+      <p className="mt-5 text-sm leading-6 text-ink/70">
         Pick a handle, tap once, and the node grinds a real puzzle proof for your first $PHY. Contributing is voluntary — you keep what you mine, and sending to others is always your choice.
       </p>
+
       {!done ? (
-        <div className="mt-6 space-y-2 text-left">
+        <div className="mt-6 space-y-3">
           <input
             value={nickname}
             onChange={(e) => setNickname(e.target.value.toLowerCase())}
             placeholder="your handle e.g. sam_07"
-            className="w-full rounded-xl border border-sky/30 bg-white px-4 py-3 text-center text-sm"
+            className="w-full px-4 py-3 text-center text-sm"
           />
           <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="password (8+ chars, locks the wallet)"
             type="password"
-            className="w-full rounded-xl border border-sky/30 bg-white px-4 py-3 text-center text-sm"
+            className="w-full px-4 py-3 text-center text-sm"
           />
           <button
             onClick={start}
             disabled={busy || !nickname}
-            className="w-full rounded-full bg-forest px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+            className="brutal-btn w-full"
           >
-            {busy ? "Working…" : "Start mining"}
+            {busy ? "Working…" : "Start mining →"}
           </button>
-          {msg && <p className="font-mono text-xs text-ink/60 text-center">{msg}</p>}
-          <p className="font-mono text-[10px] text-ink/40 text-center">lowercase, _ and a digit — e.g. alex_02</p>
+          {msg && <p className="text-center font-mono text-[11px] text-ink/60">{msg}</p>}
+          <p className="text-center font-mono text-[10px] uppercase tracking-[0.1em] text-ink/40">lowercase, _ and a digit — e.g. alex_02</p>
         </div>
       ) : (
         <div className="mt-6 space-y-3">
-          <p className="font-mono text-xs text-ink/60">{msg}</p>
-          {inviter && <p className="slip rounded-xl border border-forest/20 bg-white px-4 py-3 font-mono text-xs text-forest">+0.5 $PHY queued for @{inviter} on your first win.</p>}
-          <a href="/app/roadmap" className="block rounded-full bg-accent px-4 py-3 text-sm font-bold text-white">
+          <div className="brutal-card p-4">
+            <p className="font-mono text-xs leading-6 text-ink/70">{msg}</p>
+          </div>
+          {inviter && (
+            <p className="border-[3px] border-ink bg-white px-4 py-3 font-mono text-xs font-bold text-forest shadow-brutal-sm">
+              +0.5 $PHY queued for @{inviter} on your first win.
+            </p>
+          )}
+          <a href="/app/roadmap" className="brutal-btn brutal-btn--coral w-full">
             Open the Road →
           </a>
         </div>

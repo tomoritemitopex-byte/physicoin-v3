@@ -175,7 +175,7 @@ function VoteButtons({ id, title }: { id: string; title: string }) {
         onClick={() => vote("YES")}
         disabled={busy}
         aria-label={`Confirm ${title}`}
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-forest text-xl font-bold text-white shadow disabled:opacity-50"
+        className="flex h-12 w-12 items-center justify-center border-[3px] border-ink bg-lime text-xl font-bold text-ink shadow-brutal-sm disabled:opacity-50"
       >
         ✓
       </button>
@@ -183,7 +183,7 @@ function VoteButtons({ id, title }: { id: string; title: string }) {
         onClick={() => vote("NO")}
         disabled={busy}
         aria-label={`Reject ${title}`}
-        className="flex h-12 w-12 items-center justify-center rounded-full border border-brick/30 bg-white text-base font-bold text-brick disabled:opacity-50"
+        className="flex h-12 w-12 items-center justify-center border-[3px] border-ink bg-white text-base font-bold text-brick shadow-brutal-sm disabled:opacity-50"
       >
         ✕
       </button>
@@ -446,7 +446,7 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
         </div>
       )}
       {/* Heat Hall — one-glance strip */}
-      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-sky/20 bg-white/90 px-3 py-2 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-2 border-[3px] border-ink bg-white px-3 py-2 shadow-brutal-sm">
         <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Heat Hall</span>
         {hottest ? (
           <span className="flex items-center gap-2 font-mono text-[11px]">
@@ -529,7 +529,7 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       })}
 
       {buildingId && (
-        <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-sky/30 bg-white/95 p-4">
+        <div className="mx-auto mt-6 max-w-lg border-[3px] border-ink bg-white p-4 shadow-brutal">
           <p className="text-sm font-black">
             {BUILDINGS.find((b) => b.id === buildingId)?.label} — pick your level
           </p>
@@ -546,7 +546,7 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
                 onClick={() => setLevel(level === lv ? null : lv)}
                 aria-pressed={level === lv}
                 className={`rounded-xl border px-3 py-2 text-sm font-bold ${
-                  level === lv ? "bg-accent text-white" : "bg-white"
+                  level === lv ? "bg-coral text-ink" : "bg-white"
                 }`}
               >
                 {lv}

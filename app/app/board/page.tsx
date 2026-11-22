@@ -654,10 +654,10 @@ export default function BoardPage() {
       {/* sky header ruled */}
       <div className="mx-auto max-w-[1120px] px-4 pt-6 sm:px-6">
         {/* eyebrow */}
-        <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-accent">Timetable + Mining · one board</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="font-display text-[30px] font-black leading-none tracking-tight sm:text-[36px]">
-            Board <span className="font-normal text-ink/35">· fused</span>
+        <p className="kicker text-coral">timetable + mining · one board</p>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-5xl leading-[0.9] sm:text-6xl">
+            BOARD<span className="text-coral">.</span>
           </h1>
           <p className="max-w-[560px] text-[13px] leading-relaxed text-ink/60">
             Post a notice → it sits in the mempool → miners lottery it in → a block locks it with <span className="font-mono text-[11px]">prev_hash</span> + <span className="font-mono text-[11px]">tx_root</span> → chain.
@@ -686,7 +686,7 @@ export default function BoardPage() {
           }
           const label = hottest ? (BUILDING_LABEL[hottest] || hottest) : "";
           return (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky/20 bg-white/90 px-3 py-2 shadow-sm">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-[3px] border-ink bg-white px-3 py-2 shadow-brutal-sm">
               <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Heat Hall</span>
               {hottest ? (
                 <span className="flex items-center gap-2 font-mono text-[11px]">
@@ -695,7 +695,7 @@ export default function BoardPage() {
                   <span className="hidden sm:inline text-ink/40">open Roadmap → tap red hall for ×1.5</span>
                   <button onClick={() => {
                     try { localStorage.setItem(HEAT_BOOST_KEY, JSON.stringify({ buildingId: hottest, ts: Date.now() })); setBoostHall(hottest); setHeatToast(`Next ticket ×1.5 for ${label}`); setTimeout(()=>setHeatToast(""),2600);} catch {}
-                  }} className="ml-1 rounded-full bg-brick px-2.5 py-1 text-[11px] font-bold text-white hover:bg-brick/90">Tap ×1.5</button>
+                  }} className="ml-1 border-2 border-ink bg-coral px-2.5 py-1 text-[11px] font-bold text-ink hover:bg-coral/90">Tap ×1.5</button>
                 </span>
               ) : (
                 <span className="font-mono text-[11px] text-ink/40">no pending heat — post a slip</span>

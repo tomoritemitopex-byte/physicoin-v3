@@ -209,9 +209,10 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
-      <h1 className="font-display text-3xl font-black tracking-tight">Profile</h1>
+      <p className="kicker text-coral">your wallet</p>
+      <h1 className="mt-2 text-4xl sm:text-5xl">PROFILE.</h1>
       {!me ? (
-        <div className="mt-4 space-y-2 rounded-2xl border border-sky/30 bg-white p-4">
+        <div className="mt-4 space-y-2 brutal-card p-4">
           <input
             value={form.nickname}
             onChange={(e) => setForm({ ...form, nickname: e.target.value })}
@@ -244,7 +245,7 @@ export default function ProfilePage() {
               ))}
             </select>
           </div>
-          <button onClick={create} className="w-full rounded-full bg-accent px-4 py-2 text-sm font-bold text-white">
+          <button onClick={create} className="brutal-btn w-full">
             Create handle
           </button>
           {msg && <p className="font-mono text-[11px] text-ink/60">{msg}</p>}
@@ -252,10 +253,10 @@ export default function ProfilePage() {
         </div>
       ) : (
         <div className="mt-4 space-y-3">
-          <div className="rounded-2xl border border-sky/30 bg-white p-4">
+          <div className="brutal-card p-4">
             <p className="text-lg font-black">@{me.nickname}</p>
             {genesis && (
-              <p className="mt-1 inline-block rounded-full bg-accent px-2 py-0.5 font-mono text-[10px] font-bold text-white">
+              <p className="brutal-tag brutal-tag--coral mt-1">
                 ★ Genesis wallet — first on the chain
               </p>
             )}
@@ -266,7 +267,7 @@ export default function ProfilePage() {
               Sign out
             </button>
           </div>
-          <div className="rounded-2xl border border-sky/30 bg-white p-4">
+          <div className="brutal-card p-4">
             <p className="font-mono text-[11px] uppercase text-ink/50">Wallet lock</p>
             <div className="mt-2 flex gap-2">
               <input
@@ -276,17 +277,17 @@ export default function ProfilePage() {
                 type="password"
                 className="flex-1 rounded-lg border border-sky/30 px-3 py-2 text-sm"
               />
-              <button onClick={login} className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">
+              <button onClick={login} className="brutal-btn brutal-btn--ink">
                 Unlock
               </button>
-              <button onClick={enrollPw} className="rounded-full border border-sky/30 px-4 py-2 text-sm font-bold">
+              <button onClick={enrollPw} className="brutal-btn brutal-btn--white">
                 Lock
               </button>
             </div>
             <p className="mt-1 font-mono text-[10px] text-ink/40">Lock sets the password once, forever. Unlock opens the session.</p>
             {loginMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{loginMsg}</p>}
           </div>
-          <div className="rounded-2xl border border-sky/30 bg-white p-4">
+          <div className="brutal-card p-4">
             <p className="font-mono text-[11px] uppercase text-ink/50">Wallet</p>
             <p className="text-2xl font-black">{Number(me.mining_balance).toFixed(2)} $PHY</p>
             <div className="mt-3 flex gap-2">
@@ -303,7 +304,7 @@ export default function ProfilePage() {
                 inputMode="decimal"
                 className="w-24 rounded-lg border border-sky/30 px-3 py-2 text-sm"
               />
-              <button onClick={sendCoins} className="rounded-full bg-forest px-4 py-2 text-sm font-bold text-white">
+              <button onClick={sendCoins} className="brutal-btn">
                 Send
               </button>
             </div>
@@ -325,7 +326,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Faucet weekly drip — visibly linked to 3-vote + 24h rule */}
-          <div className="rounded-2xl border border-sky/30 bg-white p-4">
+          <div className="brutal-card p-4">
             <div className="flex items-center justify-between">
               <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Faucet · 1 $PHY/week</p>
               <span className="rounded-full bg-ink px-2 py-1 font-mono text-[10px] font-bold text-white">{faucet?.week ?? "—"}</span>
@@ -358,7 +359,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Invite rewards — slip + Fraunces */}
-          <div className="slip rounded-2xl border border-sky/20 bg-white p-5 pt-6">
+          <div className="brutal-card p-5">
             <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Invite · 0.5 $PHY on their first win</p>
             <h2 className="font-display mt-1 text-xl font-black tracking-tight">Grow the node</h2>
             <p className="mt-1 text-sm leading-relaxed text-ink/60">

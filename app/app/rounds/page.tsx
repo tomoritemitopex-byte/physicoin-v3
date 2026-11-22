@@ -136,13 +136,14 @@ export default function RoundsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 text-ink">
-      <h1 className="font-display text-3xl font-black tracking-tight">Round history</h1>
+      <p className="kicker text-coral">the ledger</p>
+      <h1 className="mt-2 text-4xl sm:text-5xl">ROUND HISTORY.</h1>
       <p className="mt-1 text-sm text-ink/60">
         Every block locks timetable slips. Mining mints the timetable — chain, grid, and txs together. Tap any row to see <span className="font-mono text-[11px]">prev_hash → winning_ticket</span> + <span className="font-mono text-[11px]">tx_root</span>.
       </p>
 
       {leaders.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-accent/30 bg-white p-4">
+        <div className="brutal-card mt-4 p-4">
           <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Leaderboard</p>
           {leaders.map((l, i) => (
             <div key={l.nickname} className="mt-1 flex items-center justify-between font-mono text-xs">
@@ -170,7 +171,7 @@ export default function RoundsPage() {
               const d = details[r.number];
               const isLoading = detailLoading === r.number;
               return (
-                <div key={r.number} className={`overflow-hidden rounded-xl border bg-white ${isOpen ? "border-accent/40 shadow-sm" : "border-sky/20 hover:border-accent/30"}`}>
+                <div key={r.number} className={`overflow-hidden border-[3px] border-ink bg-white ${isOpen ? "shadow-brutal" : "shadow-brutal-sm"}`}>
                   <button
                     onClick={() => toggle(r.number)}
                     className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left font-mono text-xs"
@@ -188,7 +189,7 @@ export default function RoundsPage() {
                   </button>
 
                   {isOpen && (
-                    <div className="border-t border-sky/20 bg-paper px-3 py-3">
+                    <div className="border-t-[3px] border-ink bg-paper px-3 py-3">
                       {isLoading ? (
                         <div className="space-y-2 py-2"><div className="h-4 animate-pulse rounded bg-ink/5" /><div className="h-20 animate-pulse rounded bg-ink/5" /></div>
                       ) : detailError[r.number] ? (

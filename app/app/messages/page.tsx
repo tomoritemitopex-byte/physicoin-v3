@@ -57,27 +57,45 @@ export default function MessagesPage({ searchParams }: { searchParams?: { with?:
   }
 
   return (
-    <div className="mx-auto max-w-md px-4 py-8 pb-24">
-      <h1 className="font-display text-3xl font-black tracking-tight">Messages</h1>
-      <p className="mt-1 text-sm text-ink/60">Private line. Only the two wallets in a chat can read it.</p>
+    <div className="mx-auto max-w-lg px-4 py-8 pb-24">
+      <p className="kicker text-coral">direct line</p>
+      <h1 className="mt-2 text-4xl sm:text-5xl">MESSAGES.</h1>
+      <p className="mt-2 text-sm leading-6 text-ink/65">
+        Private line. Only the two wallets in a chat can read it.
+      </p>
+
+      <label className="mt-5 block font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink/50">
+        Chat with
+      </label>
       <input
         value={peer}
         onChange={(e) => setPeer(e.target.value)}
-        placeholder="Their handle or wallet id"
-        className="mt-4 w-full rounded-xl border border-sky/30 bg-white px-4 py-2.5 text-sm"
+        placeholder="their handle or wallet id"
+        className="mt-1 w-full px-4 py-2.5 text-sm"
       />
-      <div className="slip mt-4 space-y-3 p-4 pt-6">
-        {msgs.length === 0 && <p className="text-sm text-ink/50">No messages yet. Say hello.</p>}
+
+      <div className="mt-4 min-h-[240px] space-y-3 border-[3px] border-ink bg-paper-2 p-3 shadow-brutal">
+        {msgs.length === 0 && (
+          <p className="py-10 text-center font-mono text-xs uppercase tracking-[0.12em] text-ink/40">
+            no messages yet — say hello
+          </p>
+        )}
         {msgs.map((m) => (
-          <div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.from_user === me ? "ml-auto bg-ink text-white" : "bg-sky/20"}`}>
+          <div
+            key={m.id}
+            className={`max-w-[85%] border-[3px] border-ink px-3 py-2 text-sm shadow-brutal-sm ${
+              m.from_user === me ? "ml-auto bg-ink text-white" : "bg-white text-ink"
+            }`}
+          >
             <p>{m.body}</p>
-            <p className={`mt-1 font-mono text-[10px] ${m.from_user === me ? "text-white/60" : "text-ink/50"}`}>
+            <p className={`mt-1 font-mono text-[10px] ${m.from_user === me ? "text-white/55" : "text-ink/45"}`}>
               {String(m.created_at).slice(11, 16)}
               {m.from_user === me ? (m.read ? " · read" : " · sent") : ""}
             </p>
           </div>
         ))}
       </div>
+
       <div className="mt-3 flex gap-2">
         <input
           value={draft}
@@ -85,13 +103,13 @@ export default function MessagesPage({ searchParams }: { searchParams?: { with?:
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Write…"
           maxLength={500}
-          className="flex-1 rounded-full border border-sky/30 bg-white px-4 py-2.5 text-sm"
+          className="flex-1 px-4 py-2.5 text-sm"
         />
-        <button onClick={send} className="rounded-full bg-ink px-5 py-2.5 text-sm font-bold text-white">
+        <button onClick={send} className="brutal-btn brutal-btn--coral shrink-0">
           Send
         </button>
       </div>
-      {note && <p className="mt-2 font-mono text-xs text-ink/60">{note}</p>}
+      {note && <p className="mt-2 font-mono text-[11px] text-ink/55">{note}</p>}
     </div>
   );
 }
