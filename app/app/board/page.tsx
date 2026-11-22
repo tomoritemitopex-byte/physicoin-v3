@@ -650,7 +650,7 @@ export default function BoardPage() {
   const totalPreviewBoard = (1 + xpBonusBoard + streakBonusBoard + barBonusBoard).toFixed(2);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky/30 via-[#f0fbff] to-white pb-16 text-ink">
+    <div className="min-h-screen bg-paper pb-16 text-ink">
       {/* sky header ruled */}
       <div className="mx-auto max-w-[1120px] px-4 pt-6 sm:px-6">
         {/* eyebrow */}

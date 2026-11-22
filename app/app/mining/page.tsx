@@ -224,23 +224,7 @@ export default function MiningPage() {
   const totalPreview = (1 + variableBonus).toFixed(2);
 
   return (
-    <div className="min-h-screen bg-[#fffdf7] text-ink">
-      {/* top bar — clean, billion-dollar minimal */}
-      <header className="sticky top-0 z-20 border-b border-ink/10 bg-white/85 backdrop-blur">
-        <div className="mx-auto flex h-[56px] max-w-[1120px] items-center justify-between px-4 sm:px-6">
-          <a href="/app" className="font-display text-[17px] font-black tracking-tight">PhysiCoin</a>
-          <nav className="hidden gap-6 text-[13px] font-semibold text-ink/60 sm:flex">
-            <a href="/app/roadmap" className="hover:text-accent">Road</a>
-            <a href="/app/schedule" className="hover:text-accent">Timetable</a>
-            <a href="/app/mining" className="text-accent">Mine</a>
-          </nav>
-          <a href="/app/profile" className="rounded-full border border-ink/12 bg-white px-3.5 py-1.5 font-mono text-xs font-bold tabular-nums">
-            <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle" />
-            {Number(balance).toFixed(2)} <span className="font-normal text-ink/50">$PHY</span>
-          </a>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-paper text-ink">
       <main className="mx-auto max-w-[1120px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
         {/* advanced view banner — primary is now invisible */}
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">

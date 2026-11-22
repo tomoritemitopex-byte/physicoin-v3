@@ -1,26 +1,17 @@
+import Link from "next/link";
+import AppNav from "@/components/ui/AppNav";
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-ink/10 bg-white/80 px-4 py-3 backdrop-blur">
-        <a href="/" className="font-display text-xl font-black tracking-tight">
-          PhysiCoin
-        </a>
-        <nav className="flex gap-4 text-sm font-semibold">
-          <a href="/app/game" className="bg-cyan-500 text-slate-900 rounded-full px-3 py-1">Game</a>
-          <a href="/app/roadmap">Road</a>
-          <a href="/app/schedule">Timetable</a>
-          <a href="/app/mining">Mining</a>
-          <a href="/app/profile">Profile</a>
-        </nav>
-      </header>
-      <main>{children}</main>
-      <nav className="fixed bottom-0 left-0 right-0 flex justify-center gap-5 border-t border-sky/30 bg-white/95 py-3 text-sm font-bold">
-        <a href="/app/game" className="bg-cyan-500 text-slate-900 rounded-full px-3 py-1">Game</a>
-        <a href="/app/roadmap">🛣 Road</a>
-        <a href="/app/schedule">📅 Table</a>
-        <a href="/app/mining">⛏ Mine</a>
-        <a href="/app/profile">👤 Profile</a>
-      </nav>
+    <div className="min-h-screen bg-paper text-ink">
+      <AppNav />
+      <main className="pb-24 lg:pb-0">{children}</main>
+      <footer className="mx-auto max-w-[1280px] border-t-[3px] border-ink px-4 py-6 text-center font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-ink/55 sm:px-6 lg:px-8">
+        PHYSICOIN · built by students ·{" "}
+        <Link href="/terms" className="underline">
+          terms
+        </Link>
+      </footer>
     </div>
   );
 }
