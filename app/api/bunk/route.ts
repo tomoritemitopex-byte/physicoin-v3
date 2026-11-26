@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { report, status, recent } from "@/lib/domains/bunk";
 import { toErrorResponse } from "@/lib/errors";
-import { actorOptional } from "@/lib/guard";
+import { actorOptional, requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     const u = new URL(req.url);
     const event_id = u.searchParams.get("event_id");
     if (!event_id) return NextResponse.json({ ok: true, recent: await recent() });
-    return NextResponse.json({ ok: true, ...(await status(event_id)) });
+    return NextResponse.json({ ok: true, ...(await status(requireUuid(event_id, "event_id"))) });
   } catch (e) {
     return toErrorResponse(e);
   }

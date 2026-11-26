@@ -46,3 +46,21 @@ export async function anySession(req: Request): Promise<string> {
 export function cap(s: unknown, max: number): string {
   return String(s || "").slice(0, max);
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True when the value is a canonical UUID. */
+export function isUuid(v: unknown): boolean {
+  return UUID_RE.test(String(v ?? "").trim());
+}
+
+/**
+ * Query params that land in a UUID column must be UUIDs before they reach SQL.
+ * Postgres rejects '' with "invalid input syntax for type uuid", which surfaced
+ * as a 500 instead of a 400. Every route that accepts an id validates here.
+ */
+export function requireUuid(value: unknown, field: string): string {
+  const v = String(value ?? "").trim();
+  if (!isUuid(v)) throw new DomainError("BAD_INPUT", `${field} must be a UUID.`, 400);
+  return v;
+}

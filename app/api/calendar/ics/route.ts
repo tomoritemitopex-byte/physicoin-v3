@@ -1,13 +1,15 @@
 import { calendarIcs } from "@/lib/domains/misc";
 import { toErrorResponse } from "@/lib/errors";
+import { isUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
+    const rawUser = u.searchParams.get("user_id") || "";
     const ics = await calendarIcs({
-      user_id: u.searchParams.get("user_id") || undefined,
+      user_id: isUuid(rawUser) ? rawUser : undefined,
       programme: u.searchParams.get("programme") || undefined,
       level: u.searchParams.get("level") || undefined,
     });

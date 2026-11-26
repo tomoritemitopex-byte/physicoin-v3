@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { stake, listOpenFutures, listFutures } from "@/lib/domains/futures";
 import { toErrorResponse } from "@/lib/errors";
+import { requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const event_id = u.searchParams.get("event_id") || "";
-    if (!event_id) {
-      return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "event_id is required." }, { status: 400 });
-    }
+    const event_id = requireUuid(u.searchParams.get("event_id"), "event_id");
     const status = u.searchParams.get("status") || undefined;
     // Default: list open futures for the event
     const futures = status ? await listFutures(event_id, status) : await listOpenFutures(event_id);

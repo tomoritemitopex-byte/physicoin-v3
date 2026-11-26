@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { wave, inbox } from "@/lib/domains/squad";
 import { toErrorResponse } from "@/lib/errors";
-import { actor } from "@/lib/guard";
+import { actor, requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const user_id = u.searchParams.get("user_id") || "";
+    const user_id = requireUuid(u.searchParams.get("user_id"), "user_id");
     return NextResponse.json({ ok: true, waves: await inbox(user_id) });
   } catch (e) {
     return toErrorResponse(e);

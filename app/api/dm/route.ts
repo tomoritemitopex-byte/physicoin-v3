@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { thread, sendDM } from "@/lib/domains/dms";
 import { toErrorResponse } from "@/lib/errors";
+import { requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ function tokenOf(req: Request, body?: any): string {
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const user_id = u.searchParams.get("user_id") || "";
+    const user_id = requireUuid(u.searchParams.get("user_id"), "user_id");
+    // `with` may be a UUID OR a nickname — thread() resolves both. Only user_id is UUID-bound.
     const peer = u.searchParams.get("with") || "";
     return NextResponse.json({ ok: true, messages: await thread(user_id, peer, tokenOf(req)) });
   } catch (e) {

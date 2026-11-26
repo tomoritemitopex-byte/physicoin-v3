@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ping, heat } from "@/lib/domains/squad";
 import { toErrorResponse } from "@/lib/errors";
-import { actor } from "@/lib/guard";
+import { actor, isUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
       ...(await heat({
         programme: u.searchParams.get("programme") || undefined,
         level: u.searchParams.get("level") || undefined,
-        viewer_id: u.searchParams.get("viewer_id") || undefined,
+        viewer_id: isUuid(u.searchParams.get("viewer_id") || "") ? u.searchParams.get("viewer_id") || "" : undefined,
       })),
     });
   } catch (e) {

@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { createUser, getInviteStats, getUser, getUserByNickname, walletRank } from "@/lib/domains/users";
 import { toErrorResponse } from "@/lib/errors";
+import { requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const id = u.searchParams.get("id");
+    const id = u.searchParams.get("id") ?? "";
+    const userId = id ? requireUuid(id, "id") : null;
     const nickname = u.searchParams.get("nickname");
-    const user = id ? await getUser(id) : nickname ? await getUserByNickname(nickname) : null;
+    const user = userId ? await getUser(userId) : nickname ? await getUserByNickname(nickname) : null;
     if (!user) return NextResponse.json({ ok: false, code: "NOT_FOUND", message: "Profile not found." }, { status: 404 });
     const rank = await walletRank(user.id);
     let invites = null;

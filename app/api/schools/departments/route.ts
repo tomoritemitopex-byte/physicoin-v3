@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { createDepartment, listDepartments } from "@/lib/domains/schools";
 import { toErrorResponse } from "@/lib/errors";
-import { actor, cap } from "@/lib/guard";
+import { actor, cap, requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const school_id = u.searchParams.get("school_id") || "";
+    const school_id = requireUuid(u.searchParams.get("school_id"), "school_id");
     return NextResponse.json({ ok: true, departments: await listDepartments(school_id) });
   } catch (e) {
     return toErrorResponse(e);

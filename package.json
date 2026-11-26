@@ -11,6 +11,7 @@
     "migrate": "node scripts/migrate.mjs",
     "seed": "node scripts/seed.mjs",
     "check": "node scripts/check.mjs",
+    "test:api": "bash scripts/api-regress.sh",
     "start": "next start",
     "lint": "next lint"
   },

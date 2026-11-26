@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { castVote, getTally } from "@/lib/domains/votes";
 import { toErrorResponse } from "@/lib/errors";
-import { actor } from "@/lib/guard";
+import { actor, requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const event_id = u.searchParams.get("event_id");
-    if (!event_id) {
-      return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "event_id is required." }, { status: 400 });
-    }
+    const event_id = requireUuid(u.searchParams.get("event_id"), "event_id");
     return NextResponse.json({ ok: true, ...(await getTally(event_id)) });
   } catch (e) {
     return toErrorResponse(e);

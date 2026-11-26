@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
 import { drop, feed } from "@/lib/domains/notes";
 import { toErrorResponse } from "@/lib/errors";
-import { actorOptional, cap } from "@/lib/guard";
+import { actorOptional, cap, isUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
+    const viewer = u.searchParams.get("viewer_id") || "";
     return NextResponse.json({
       ok: true,
       notes: await feed({
         building_id: u.searchParams.get("building_id") || undefined,
         level: u.searchParams.get("level") || undefined,
-        viewer_id: u.searchParams.get("viewer_id") || undefined,
+        viewer_id: isUuid(viewer) ? viewer : undefined,
       }),
     });
   } catch (e) {

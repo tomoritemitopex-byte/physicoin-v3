@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { grindAndSubmit, recordProof, roundWins, currentRound, miningDashboard } from "@/lib/domains/rounds";
 import { toErrorResponse } from "@/lib/errors";
+import { requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -10,7 +11,7 @@ export const maxDuration = 120;
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const user_id = u.searchParams.get("user_id") || "";
+    const user_id = u.searchParams.get("user_id") ? requireUuid(u.searchParams.get("user_id"), "user_id") : "";
     if (u.searchParams.get("round") === "current") {
       return NextResponse.json({ ok: true, ...(await currentRound()) });
     }

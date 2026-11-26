@@ -3,18 +3,19 @@ import { send, history } from "@/lib/domains/transfers";
 import { toErrorResponse } from "@/lib/errors";
 import { validateSession } from "@/lib/domains/auth";
 import { DomainError } from "@/lib/domains/users";
+import { requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const user_id = u.searchParams.get("user_id") || "";
     const h = req.headers.get("authorization") || "";
     const token = h.startsWith("Bearer ") ? h.slice(7) : "";
     if (!token) {
       throw new DomainError("NO_TOKEN", "Wallet session required.", 401);
     }
+    const user_id = requireUuid(u.searchParams.get("user_id"), "user_id");
     const { user_id: me } = await validateSession(token);
     if (me !== user_id) {
       throw new DomainError("NOT_YOURS", "This session cannot read that wallet.", 403);

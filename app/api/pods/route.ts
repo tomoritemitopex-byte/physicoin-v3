@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPods, createPodForEvent } from "@/lib/domains/pods";
 import { toErrorResponse } from "@/lib/errors";
+import { requireUuid } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url);
-    const user_id = u.searchParams.get("user_id") || u.searchParams.get("viewer_id") || "";
-    if (!user_id) {
-      return NextResponse.json({ ok: false, code: "MISSING_FIELDS", message: "user_id is required." }, { status: 400 });
-    }
+    const user_id = requireUuid(u.searchParams.get("user_id") || u.searchParams.get("viewer_id"), "user_id");
     const pods = await getPods(user_id);
     return NextResponse.json({ ok: true, pods, count: pods.length });
   } catch (e) {
