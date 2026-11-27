@@ -31,8 +31,8 @@ export const ROUND_NONCES = 2000;
 export const MAX_ROUND_SUBMITS = 25;
 /** Website grind batch: small enough for a snappy click. */
 export const WEBSITE_GRIND_NONCES = 64;
-/** repairRounds() batch cap: keeps a visit cheap on a long-idle chain. */
-export const REPAIR_BATCH = 400;
+/** repairRounds() batch cap: one bounded statement per visit. */
+export const REPAIR_BATCH = 5000;
 /** Moat rule (Step 6): the bar may never rise above this — eligibility
  * must always cost real grinding (random 6x6 grids score ~60). */
 export function barCap(order: number): number {
