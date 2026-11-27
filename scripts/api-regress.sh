@@ -79,6 +79,29 @@ else
   fail=$((fail+1))
 fi
 
+# The chain must be readable and self-consistent after a repair pass.
+code=$(curl -s -m 30 -o /tmp/c.out -w '%{http_code}' "$BASE/api/rounds?view=chain&limit=200")
+if [ "$code" = "200" ] && grep -q '"valid":true' /tmp/c.out 2>/dev/null; then
+  echo "PASS  block chain verifies after repair  (/api/rounds?view=chain -> 200 valid)"
+  pass=$((pass+1))
+else
+  echo "FAIL  block chain verifies after repair  (got $code: $(head -c 160 /tmp/c.out))"
+  fail=$((fail+1))
+fi
+
+# Repair must be idempotent: a second pass changes nothing.
+curl -s -m 30 -o /dev/null "$BASE/api/rounds?limit=3"
+a=$(curl -s -m 30 "$BASE/api/rounds?view=chain&limit=200")
+curl -s -m 30 -o /dev/null "$BASE/api/rounds?limit=3"
+b=$(curl -s -m 30 "$BASE/api/rounds?view=chain&limit=200")
+if [ "$a" = "$b" ] && echo "$b" | grep -q '"valid":true'; then
+  echo "PASS  repair is idempotent  (repeat visit keeps the chain valid)"
+  pass=$((pass+1))
+else
+  echo "FAIL  repair is idempotent  (got: ${b:0:160})"
+  fail=$((fail+1))
+fi
+
 echo
 echo "RESULT: $pass passed, $fail failed"
 exit $([ $fail -eq 0 ] && echo 0 || echo 1)

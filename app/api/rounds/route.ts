@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recentRounds, leaderboard } from "@/lib/domains/rounds";
+import { recentRounds, leaderboard, repairRounds, verifyChain } from "@/lib/domains/rounds";
 import { toErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,14 @@ export async function GET(req: Request) {
       const includeTest = u.searchParams.get("lab") === "1";
       return NextResponse.json({ ok: true, leaders: await leaderboard(limit, includeTest) });
     }
+    // Public chain check: anyone can confirm the blocks link up.
+    if (u.searchParams.get("view") === "chain") {
+      return NextResponse.json({ ok: true, ...(await verifyChain(limit)) });
+    }
+    // Rounds advance from page visits alone, so browsing the explorer is
+    // also what closes stale rounds and fills holes left by idle periods.
+    // A no-op once the table is whole.
+    await repairRounds();
     return NextResponse.json({
       ok: true,
       rounds: await recentRounds(limit),

@@ -31,6 +31,8 @@ export const ROUND_NONCES = 2000;
 export const MAX_ROUND_SUBMITS = 25;
 /** Website grind batch: small enough for a snappy click. */
 export const WEBSITE_GRIND_NONCES = 64;
+/** repairRounds() batch cap: keeps a visit cheap on a long-idle chain. */
+export const REPAIR_BATCH = 400;
 /** Moat rule (Step 6): the bar may never rise above this — eligibility
  * must always cost real grinding (random 6x6 grids score ~60). */
 export function barCap(order: number): number {
@@ -116,8 +118,12 @@ export async function closeRound(n: number) {
     nextThreshold = openingThreshold(nextOrder);
   }
   if (!best[0]) {
+    // Empty blocks carry the chain: prev_hash stays the last real ticket,
+    // which is exactly what verifyChain() expects when several rounds in a
+    // row have no submissions.
     const prevRound = await sql<{ t: string | null }[]>`
-      SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${n - 1} LIMIT 1`;
+      SELECT winning_ticket AS t FROM physi_rounds
+      WHERE number < ${n} AND winning_ticket IS NOT NULL ORDER BY number DESC LIMIT 1`;
     const prevHash = prevRound[0]?.t || "GENESIS";
     await sql`UPDATE physi_rounds SET status = 'closed', closed_at = NOW(),
       prev_hash = ${prevHash}, tx_root = 'GENESIS', tx_count = 0 WHERE number = ${n}`;
@@ -156,7 +162,8 @@ export async function closeRound(n: number) {
   await sql`UPDATE physi_users SET rep_ghost_sig = ${sig}, ghost_sig_updated_at = NOW() WHERE id = ${w.user_id}`;
   // Chain it: this round's header commits to the previous winning ticket.
   const prevRound = await sql<{ t: string | null }[]>`
-    SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${n - 1} LIMIT 1`;
+    SELECT winning_ticket AS t FROM physi_rounds
+    WHERE number < ${n} AND winning_ticket IS NOT NULL ORDER BY number DESC LIMIT 1`;
   const prevHash = prevRound[0]?.t || "GENESIS";
   await sql`UPDATE physi_rounds SET status = 'closed', winner_user_id = ${w.user_id},
     winning_score = ${w.score}, winning_nonce = ${w.nonce}, winning_ticket = ${w.ticket},
@@ -206,6 +213,103 @@ export async function closeRound(n: number) {
   return { round: n, winner: w.user_id, score: w.score, ticket: w.ticket, prev_hash: prevHash, tx_root: txRoot, tx_count: txCount, consumed_swaps: consumedSwaps, consumed_swap_ids: consumedSwapIds, next: { order: nextOrder, threshold: nextThreshold } };
 }
 
+/**
+ * Make the round table whole.
+ *
+ * Rounds are created lazily by ensureRound(), so when nobody visits the
+ * site the table fills with holes: the tip keeps climbing while whole
+ * ranges never get a row, and the rows that do exist stay 'open'.
+ * Production showed exactly this - 6 rounds stuck open (49842, 50278,
+ * 52386, 52465, 52812, 52814) and ~2,900 missing round numbers.
+ *
+ * repairRounds() closes anything still open in the past and backfills
+ * the holes with empty closed blocks, so the chain reads as one run of
+ * 120-second blocks instead of a dotted line. It is idempotent, bounded
+ * (a long-idle chain can't blow the request budget), and a no-op when
+ * the table is already whole.
+ */
+export async function repairRounds(batch = REPAIR_BATCH) {
+  const current = roundNumberAt(Date.now());
+  const sql = getDb();
+  const [state] = await sql<{ lo: number | null; hi: number | null; n: number; stale: number }[]>`
+    SELECT min(number) AS lo, max(number) AS hi, count(*)::int AS n,
+           count(*) FILTER (WHERE status = 'open' AND number < ${current})::int AS stale
+    FROM physi_rounds`;
+  if (state.hi == null) return { closed: 0, backfilled: 0 };
+
+  // Cheap exit: contiguous, tip is the live round, nothing stale left open.
+  const span = state.hi - (state.lo ?? state.hi) + 1;
+  if (state.n === span && state.hi >= current && state.stale === 0) {
+    return { closed: 0, backfilled: 0 };
+  }
+
+  // 1. Close stale rounds that already have a row.
+  //    Empty ones can be closed in bulk; a round with submissions must go
+  //    through closeRound() so its winning ticket is settled and paid.
+  const paid = await sql<{ number: number }[]>`
+    SELECT r.number FROM physi_rounds r
+    WHERE r.status = 'open' AND r.number < ${current}
+      AND EXISTS (SELECT 1 FROM physi_round_proofs p WHERE p.round_number = r.number)
+    ORDER BY r.number ASC LIMIT 20`;
+  let closed = 0;
+  for (const r of paid) {
+    await closeRound(r.number);
+    closed += 1;
+  }
+  const bulk = await sql`
+    UPDATE physi_rounds r
+    SET status = 'closed', closed_at = NOW(),
+        prev_hash = COALESCE((SELECT p.winning_ticket FROM physi_rounds p
+                              WHERE p.number < r.number AND p.winning_ticket IS NOT NULL
+                              ORDER BY p.number DESC LIMIT 1), 'GENESIS'),
+        tx_root = 'GENESIS', tx_count = 0
+    WHERE r.number IN (
+      SELECT number FROM physi_rounds
+      WHERE status = 'open' AND number < ${current}
+        AND NOT EXISTS (SELECT 1 FROM physi_round_proofs p WHERE p.round_number = physi_rounds.number)
+      ORDER BY number ASC LIMIT ${batch})`;
+  closed += bulk.count;
+  // 2. Round numbers that never got a row at all — gaps left by idle
+  //    periods. Fill them as empty closed blocks so the chain is
+  //    contiguous, mirroring what closeRound() does for an empty round.
+  //    One statement, bounded, oldest-first.
+  const stepMs = ROUND_SECS * 1000;
+  const genesisMs = Date.parse(GENESIS_ISO);
+  const filled = await sql<{ number: number }[]>`
+    WITH ordered AS (
+      SELECT number, lead(number) OVER (ORDER BY number) AS nxt FROM physi_rounds
+    ),
+    gaps AS (
+      SELECT number + 1 AS s, nxt - 1 AS e
+      FROM ordered WHERE nxt IS NOT NULL AND nxt > number + 1
+      UNION ALL
+      SELECT max(number) + 1, ${current}
+      FROM physi_rounds HAVING max(number) < ${current}
+    ),
+    holes AS (
+      SELECT s.g AS n
+      FROM gaps CROSS JOIN LATERAL generate_series(gaps.s, gaps.e) AS s(g)
+      ORDER BY s.g ASC LIMIT ${batch}
+    )
+    INSERT INTO physi_rounds
+      (number, starts_at, ends_at, lattice_order, difficulty, status, closed_at, prev_hash, tx_root, tx_count)
+    SELECT m.n,
+           to_timestamp(((${genesisMs}::bigint + m.n * ${stepMs}::bigint))::double precision / 1000.0),
+           to_timestamp(((${genesisMs}::bigint + (m.n + 1) * ${stepMs}::bigint))::double precision / 1000.0),
+           COALESCE((SELECT r.lattice_order FROM physi_rounds r WHERE r.number < m.n ORDER BY r.number DESC LIMIT 1), ${GENESIS_ORDER}),
+           COALESCE((SELECT r.difficulty FROM physi_rounds r WHERE r.number < m.n ORDER BY r.number DESC LIMIT 1), ${GENESIS_THRESHOLD}),
+           CASE WHEN m.n < ${current} THEN 'closed' ELSE 'open' END,
+           CASE WHEN m.n < ${current} THEN NOW() ELSE NULL END,
+           COALESCE((SELECT r.winning_ticket FROM physi_rounds r
+                     WHERE r.number < m.n AND r.winning_ticket IS NOT NULL
+                     ORDER BY r.number DESC LIMIT 1), 'GENESIS'),
+           'GENESIS', 0
+    FROM holes m
+    ON CONFLICT (number) DO NOTHING
+    RETURNING number`;
+  return { closed, backfilled: filled.length };
+}
+
 /** Close every finished round before doing anything else. */
 export async function settle() {
   const now = Date.now();
@@ -227,6 +331,8 @@ export async function settle() {
       closed.push(await closeRound(o.n));
     }
   }
+  // Holes left by idle periods: backfill and settle past rounds.
+  await repairRounds();
   return closed;
 }
 
@@ -459,26 +565,34 @@ export async function leaderboard(limit = 20, includeTest = false) {
 }
 
 // Satoshi Test 2: verify checks prev_hash chain, not one block alone.
-// Walks physi_rounds in number order, ensuring each prev_hash equals
-// previous winning_ticket (GENESIS for the first). Returns first break.
+// Walks the newest closed blocks in number order, ensuring each prev_hash
+// matches the chain's last winning ticket (GENESIS for the first). Empty
+// blocks carry the previous ticket forward, so a run of quiet rounds still
+// reads as one unbroken chain. Returns first break.
 export async function verifyChain(limit = 50): Promise<{ valid: boolean; brokenAt?: number; checked: number }> {
   const sql = getDb();
+  const n = Math.min(Math.max(limit, 1), 500);
   const rows = await sql<{ number: number; winning_ticket: string | null; prev_hash: string | null }[]>`
-    SELECT number, winning_ticket, prev_hash FROM physi_rounds
-    WHERE status='closed' ORDER BY number ASC LIMIT ${Math.min(limit, 200)}`;
+    SELECT number, winning_ticket, prev_hash FROM (
+      SELECT number, winning_ticket, prev_hash FROM physi_rounds
+      WHERE status = 'closed' ORDER BY number DESC LIMIT ${n}
+    ) t ORDER BY number ASC`;
   if (rows.length === 0) return { valid: true, checked: 0 };
-  // Genesis anchor: first closed round must point at GENESIS or its predecessor.
-  let expected = "GENESIS";
-  // Find predecessor of first row to handle non-zero start
-  if (rows[0].number > 0) {
-    const prev = await sql<{ t: string | null }[]>`SELECT winning_ticket AS t FROM physi_rounds WHERE number = ${rows[0].number - 1} LIMIT 1`;
-    expected = prev[0]?.t || "GENESIS";
-  }
+  // Anchor on the last real ticket before the window, so a mid-chain check
+  // starts from the right value instead of assuming genesis.
+  const [anchor] = await sql<{ t: string | null }[]>`
+    SELECT winning_ticket AS t FROM physi_rounds
+    WHERE number < ${rows[0].number} AND winning_ticket IS NOT NULL
+    ORDER BY number DESC LIMIT 1`;
+  let expected = anchor?.t || "GENESIS";
+  let prev = rows[0].number - 1;
   for (const r of rows) {
+    // A deleted block must read as a break, not fade out of the window.
+    if (r.number !== prev + 1) return { valid: false, brokenAt: prev + 1, checked: rows.length };
     const got = r.prev_hash || "GENESIS";
     if (got !== expected) return { valid: false, brokenAt: r.number, checked: rows.length };
-    expected = r.winning_ticket || expected; // empty blocks keep chain via winning_ticket or GENESIS
     if (r.winning_ticket) expected = r.winning_ticket;
+    prev = r.number;
   }
   return { valid: true, checked: rows.length };
 }
