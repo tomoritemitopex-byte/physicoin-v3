@@ -447,15 +447,15 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
       )}
       {/* Heat Hall — one-glance strip */}
       <div className="mb-3 flex items-center justify-between gap-2 border-[3px] border-ink bg-white px-3 py-2 shadow-brutal-sm">
-        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Heat Hall</span>
+        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/65">Heat Hall</span>
         {hottest ? (
           <span className="flex items-center gap-2 font-mono text-[11px]">
             <span className="inline-block h-2 w-2 rounded-full bg-brick animate-pulse" aria-hidden />
             <span className="font-bold text-brick">{BUILDINGS.find((b)=>b.id===hottest)?.code} hottest · {maxHeat} pending</span>
-            <span className="hidden sm:inline text-ink/40">tap red hall → next ticket ×1.5</span>
+            <span className="hidden sm:inline text-ink/60">tap red hall → next ticket ×1.5</span>
           </span>
         ) : (
-          <span className="font-mono text-[11px] text-ink/40">no pending heat — post a slip</span>
+          <span className="font-mono text-[11px] text-ink/60">no pending heat — post a slip</span>
         )}
         {boostHall && (
           <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">
@@ -572,7 +572,7 @@ export default function RoadClient({ events }: { events: FeedEvent[] }) {
             </p>
             <p className="font-display mt-0.5 text-lg font-semibold leading-snug">{ev.venue}</p>
             <p className="text-sm text-ink/80">{ev.title}</p>
-            <p className="mt-1.5 font-mono text-[10px] text-ink/50">
+            <p className="mt-1.5 font-mono text-[10px] text-ink/65">
               {ev.status === "verified" ? "✓ confirmed" : "· waiting on votes"} · {ev.scope_type}
               {ev.scope_value ? ` · ${ev.scope_value}` : ""}
             </p>

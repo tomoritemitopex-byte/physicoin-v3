@@ -58,13 +58,13 @@ export default function MessagesPage({ searchParams }: { searchParams?: { with?:
 
   return (
     <div className="mx-auto max-w-lg px-4 py-8 pb-24">
-      <p className="kicker text-coral">direct line</p>
+      <p className="kicker text-brick">direct line</p>
       <h1 className="mt-2 text-4xl sm:text-5xl">MESSAGES.</h1>
       <p className="mt-2 text-sm leading-6 text-ink/65">
         Private line. Only the two wallets in a chat can read it.
       </p>
 
-      <label className="mt-5 block font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink/50">
+      <label className="mt-5 block font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink/65">
         Chat with
       </label>
       <input
@@ -76,7 +76,7 @@ export default function MessagesPage({ searchParams }: { searchParams?: { with?:
 
       <div className="mt-4 min-h-[240px] space-y-3 border-[3px] border-ink bg-paper-2 p-3 shadow-brutal">
         {msgs.length === 0 && (
-          <p className="py-10 text-center font-mono text-xs uppercase tracking-[0.12em] text-ink/40">
+          <p className="py-10 text-center font-mono text-xs uppercase tracking-[0.12em] text-ink/60">
             no messages yet — say hello
           </p>
         )}
@@ -88,7 +88,7 @@ export default function MessagesPage({ searchParams }: { searchParams?: { with?:
             }`}
           >
             <p>{m.body}</p>
-            <p className={`mt-1 font-mono text-[10px] ${m.from_user === me ? "text-white/55" : "text-ink/45"}`}>
+            <p className={`mt-1 font-mono text-[10px] ${m.from_user === me ? "text-white/55" : "text-ink/65"}`}>
               {String(m.created_at).slice(11, 16)}
               {m.from_user === me ? (m.read ? " · read" : " · sent") : ""}
             </p>

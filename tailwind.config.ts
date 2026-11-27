@@ -9,15 +9,17 @@ export default {
         ink: "#0b0b0b",
         "ink-2": "#1a1a1a",
         lime: "#c6f135",
+        // coral is a FILL colour (buttons, cards) — never text on paper.
         coral: "#ff5a3c",
         blue: "#2d6bff",
         yellow: "#ffd23f",
-        green: "#1f9d55",
+        // green/brick are TEXT colours: 5.6:1 and 5.2:1 on paper.
+        green: "#0f6b32",
         // legacy aliases kept so existing pages keep working
         sky: "#c6f135",
-        accent: "#ff5a3c",
-        brick: "#ff5a3c",
-        forest: "#1f9d55",
+        accent: "#b3240c",
+        brick: "#b3240c",
+        forest: "#0f6b32",
       },
       fontFamily: {
         display: ["var(--font-display)", "Arial Black", "system-ui", "sans-serif"],

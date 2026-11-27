@@ -27,7 +27,7 @@ export default async function GamePage() {
             <span className="kicker text-white/50">pending</span>
           </div>
           <div className="flex items-center gap-2 border-2 border-white/25 px-3 py-1.5">
-            <span className="text-coral">✦</span>
+            <span className="text-brick">✦</span>
             <span className="font-display tnum text-xl text-white">{events.length}</span>
             <span className="kicker text-white/50">slips</span>
           </div>
@@ -38,7 +38,7 @@ export default async function GamePage() {
       </div>
 
       <div className="mt-6">
-        <p className="kicker text-coral">the campus game</p>
+        <p className="kicker text-brick">the campus game</p>
         <h1 className="mt-2 text-4xl sm:text-5xl">BUILD THE CITY BY FIXING THE TIMETABLE.</h1>
         <p className="mt-3 max-w-[620px] text-sm leading-6 text-ink/65">
           Every verified slip builds a building. Every block builds the chain. Money and help, one tap —

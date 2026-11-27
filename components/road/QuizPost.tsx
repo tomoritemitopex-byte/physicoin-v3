@@ -201,7 +201,7 @@ export default function QuizPost({
     >
       {/* progress */}
       <div className="flex items-center justify-between gap-2">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/65">
           {step}/3 · {hint}
         </p>
         <button
@@ -224,7 +224,7 @@ export default function QuizPost({
       {step === 1 && (
         <div className="mt-3">
           <p className="font-display text-[15px] font-black leading-tight">Which hall moved?</p>
-          <p className="mt-1 font-mono text-[11px] text-ink/50">Tap one — prompt is the interface.</p>
+          <p className="mt-1 font-mono text-[11px] text-ink/65">Tap one — prompt is the interface.</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {HALLS.map((b) => (
               <button
@@ -246,7 +246,7 @@ export default function QuizPost({
               </button>
             ))}
           </div>
-          <p className="mt-2 font-mono text-[10px] text-ink/40">6 halls · from BUILDINGS (ANAT → COMM MED). No typing yet.</p>
+          <p className="mt-2 font-mono text-[10px] text-ink/60">6 halls · from BUILDINGS (ANAT → COMM MED). No typing yet.</p>
         </div>
       )}
 
@@ -257,12 +257,12 @@ export default function QuizPost({
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 font-mono text-[11px] font-bold text-accent">
               {hall} ✓
             </span>
-            <button onClick={() => setStep(1)} className="font-mono text-[11px] font-bold text-ink/40 hover:text-ink">
+            <button onClick={() => setStep(1)} className="font-mono text-[11px] font-bold text-ink/60 hover:text-ink">
               ← back
             </button>
           </div>
           <p className="mt-3 font-display text-[15px] font-black leading-tight">When?</p>
-          <p className="mt-1 font-mono text-[11px] text-ink/50">Pick the period — one tap.</p>
+          <p className="mt-1 font-mono text-[11px] text-ink/65">Pick the period — one tap.</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {TIMES.map((t) => (
               <button
@@ -279,7 +279,7 @@ export default function QuizPost({
               </button>
             ))}
           </div>
-          <p className="mt-2 font-mono text-[10px] text-ink/40">From PERIODS · no keyboard yet.</p>
+          <p className="mt-2 font-mono text-[10px] text-ink/60">From PERIODS · no keyboard yet.</p>
         </div>
       )}
 
@@ -295,13 +295,13 @@ export default function QuizPost({
             </span>
             <button
               onClick={() => setStep(2)}
-              className="font-mono text-[11px] font-bold text-ink/40 hover:text-ink"
+              className="font-mono text-[11px] font-bold text-ink/60 hover:text-ink"
             >
               ← back
             </button>
           </div>
           <p className="mt-3 font-display text-[15px] font-black leading-tight">What course?</p>
-          <p className="mt-1 font-mono text-[11px] text-ink/50">One field only — keyboard appears here. Then confirm.</p>
+          <p className="mt-1 font-mono text-[11px] text-ink/65">One field only — keyboard appears here. Then confirm.</p>
           <input
             value={course}
             onChange={(e) => setCourse(e.target.value)}
@@ -314,8 +314,8 @@ export default function QuizPost({
             maxLength={200}
           />
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="font-mono text-[10px] text-ink/40">{course.trim().length}/200</span>
-            <span className="font-mono text-[10px] text-ink/40">posts to /api/timetable + auto-mines</span>
+            <span className="font-mono text-[10px] text-ink/60">{course.trim().length}/200</span>
+            <span className="font-mono text-[10px] text-ink/60">posts to /api/timetable + auto-mines</span>
           </div>
           <div className="mt-3 flex items-center gap-2">
             <button
@@ -325,7 +325,7 @@ export default function QuizPost({
             >
               {busy ? "Pinning…" : "Confirm & pin"}
             </button>
-            <button onClick={close} className="text-sm font-semibold text-ink/50 hover:text-ink">
+            <button onClick={close} className="text-sm font-semibold text-ink/65 hover:text-ink">
               Cancel
             </button>
           </div>

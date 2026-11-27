@@ -36,11 +36,11 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
-      <p className="mt-1 font-mono text-[11px] text-ink/50">{paused ? "paused" : "live"} · last {logs.length} events</p>
+      <p className="mt-1 font-mono text-[11px] text-ink/65">{paused ? "paused" : "live"} · last {logs.length} events</p>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-sky/20 bg-white">
         <table className="w-full font-mono text-[11px]">
           <thead>
-            <tr className="text-left text-ink/50">
+            <tr className="text-left text-ink/65">
               <th className="p-2">Time</th>
               <th className="p-2">Method</th>
               <th className="p-2">Path</th>
@@ -60,7 +60,7 @@ export default function AdminPage() {
             ))}
             {logs.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-4 text-center text-ink/50">
+                <td colSpan={5} className="p-4 text-center text-ink/65">
                   No errors logged. Quiet is good.
                 </td>
               </tr>
