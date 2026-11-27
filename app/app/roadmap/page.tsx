@@ -18,7 +18,7 @@ export default async function RoadmapPage() {
     <div className="mx-auto max-w-[1280px] px-4 pb-10">
       <div className="flex flex-wrap items-end justify-between gap-2 py-5">
         <div>
-          <p className="kicker text-coral">the campus</p>
+          <p className="kicker text-brick">the campus</p>
           <h1 className="mt-2 text-4xl sm:text-5xl">CAMPUS ROAD.</h1>
           <p className="mt-2 text-[15px] text-ink/65">Tap a building, pick your level, check the notices.</p>
         </div>
@@ -28,8 +28,10 @@ export default async function RoadmapPage() {
         <RoadClient events={events} />
       </div>
       <div className="mt-8">
-        <h2 className="font-display text-xl">Campus City — Elvenar Face, Physicoin Heart</h2>
-        <p className="mt-1 text-sm text-ink/60">HTML5 Canvas + Y-sorted sprites — the timetable as a glowing city. Bend chose JS for web, C for native, one engine.</p>
+        <h2 className="font-display text-xl">The campus, drawn.</h2>
+        <p className="mt-1 text-sm leading-6 text-ink/70">
+          One road, every department. Tap a building on the map above to see the notices for your level.
+        </p>
         <div className="mt-4">
           <CampusCanvas />
         </div>

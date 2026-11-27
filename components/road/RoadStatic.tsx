@@ -9,7 +9,7 @@ export default function RoadStatic() {
   const d = roadPath();
   return (
     <>
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
         <div className="absolute inset-0 bg-gradient-to-b from-sky via-sky-2 to-green-50" />
       </div>
       <svg
@@ -18,7 +18,7 @@ export default function RoadStatic() {
         preserveAspectRatio="xMidYMid slice"
         style={{ minHeight: "100vh" }}
         role="img"
-        aria-label="Campus road with 8 department buildings — Elvener glowing city"
+        aria-label="Campus road with department buildings"
       >
         <defs>
           <radialGradient id="city-glow" cx="50%" cy="50%" r="50%">

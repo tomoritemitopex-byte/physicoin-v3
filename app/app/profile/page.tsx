@@ -209,8 +209,16 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-8 pb-24">
-      <p className="kicker text-coral">your wallet</p>
+      <p className="kicker text-brick">your wallet</p>
       <h1 className="mt-2 text-4xl sm:text-5xl">PROFILE.</h1>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a href="/app" className="brutal-tag">
+          ← what moved
+        </a>
+        <a href="/app/messages" className="brutal-tag">
+          messages
+        </a>
+      </div>
       {!me ? (
         <div className="mt-4 space-y-2 brutal-card p-4">
           <input
@@ -249,7 +257,7 @@ export default function ProfilePage() {
             Create handle
           </button>
           {msg && <p className="font-mono text-[11px] text-ink/60">{msg}</p>}
-          <p className="font-mono text-[10px] text-ink/40">lowercase, _ and a digit — e.g. alex_02</p>
+          <p className="font-mono text-[10px] text-ink/60">lowercase, _ and a digit — e.g. alex_02</p>
         </div>
       ) : (
         <div className="mt-4 space-y-3">
@@ -268,7 +276,7 @@ export default function ProfilePage() {
             </button>
           </div>
           <div className="brutal-card p-4">
-            <p className="font-mono text-[11px] uppercase text-ink/50">Wallet lock</p>
+            <p className="font-mono text-[11px] uppercase text-ink/65">Wallet lock</p>
             <div className="mt-2 flex gap-2">
               <input
                 value={password}
@@ -284,11 +292,11 @@ export default function ProfilePage() {
                 Lock
               </button>
             </div>
-            <p className="mt-1 font-mono text-[10px] text-ink/40">Lock sets the password once, forever. Unlock opens the session.</p>
+            <p className="mt-1 font-mono text-[10px] text-ink/60">Lock sets the password once, forever. Unlock opens the session.</p>
             {loginMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{loginMsg}</p>}
           </div>
           <div className="brutal-card p-4">
-            <p className="font-mono text-[11px] uppercase text-ink/50">Wallet</p>
+            <p className="font-mono text-[11px] uppercase text-ink/65">Wallet</p>
             <p className="text-2xl font-black">{Number(me.mining_balance).toFixed(2)} $PHY</p>
             <div className="mt-3 flex gap-2">
               <input
@@ -309,10 +317,10 @@ export default function ProfilePage() {
               </button>
             </div>
             {sendMsg && <p className="mt-1 font-mono text-[11px] text-ink/60">{sendMsg}</p>}
-            <p className="mt-1 font-mono text-[10px] text-ink/40">Sends burn 2% (min 0.01) — flow pays for scarcity.</p>
+            <p className="mt-1 font-mono text-[10px] text-ink/60">Sends burn 2% (min 0.01) — flow pays for scarcity.</p>
             {history.length > 0 && (
               <div className="mt-3 border-t border-sky/20 pt-2">
-                <p className="font-mono text-[10px] uppercase text-ink/40">Recent moves</p>
+                <p className="font-mono text-[10px] uppercase text-ink/60">Recent moves</p>
                 {history.map((h) => (
                   <p key={h.id} className="mt-1 font-mono text-[11px] text-ink/60">
                     {h.from_user === me.id ? `sent ${h.amount}` : `got ${h.amount}`} · {String(h.created_at).slice(5, 16).replace("T", " ")}
@@ -328,7 +336,7 @@ export default function ProfilePage() {
           {/* Faucet weekly drip — visibly linked to 3-vote + 24h rule */}
           <div className="brutal-card p-4">
             <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Faucet · 1 $PHY/week</p>
+              <p className="font-mono text-[11px] uppercase tracking-widest text-ink/65">Faucet · 1 $PHY/week</p>
               <span className="rounded-full bg-ink px-2 py-1 font-mono text-[10px] font-bold text-white">{faucet?.week ?? "—"}</span>
             </div>
             {faucetLoading ? (
@@ -346,21 +354,21 @@ export default function ProfilePage() {
                 <div className="mt-2 flex gap-1.5 font-mono text-[10px]">
                   <span className={`rounded-full px-2.5 py-1 font-bold ${faucet.votes >= 3 ? "bg-forest text-white" : "bg-sky/20 text-ink/60"}`}>{faucet.votes}/3 votes</span>
                   <span className={`rounded-full px-2.5 py-1 font-bold ${faucet.hoursLeft === 0 ? "bg-forest text-white" : "bg-sky/20 text-ink/60"}`}>{faucet.hoursLeft === 0 ? "✓ 24h met" : `${faucet.hoursLeft}h to go`}</span>
-                  <span className={`rounded-full px-2.5 py-1 font-bold ${faucet.eligible ? "bg-forest text-white" : "bg-ink/10 text-ink/40"}`}>{faucet.eligible ? "eligible" : "locked"}</span>
+                  <span className={`rounded-full px-2.5 py-1 font-bold ${faucet.eligible ? "bg-forest text-white" : "bg-ink/10 text-ink/60"}`}>{faucet.eligible ? "eligible" : "locked"}</span>
                 </div>
               </>
             ) : (
               <>
                 <p className="mt-2 rounded-xl border border-sky/20 bg-paper px-3 py-2 font-mono text-xs text-ink/60">Faucet status: connect wallet to check — needs 3 votes + 24h for 1 PHY/week</p>
-                <p className="mt-1 font-mono text-[10px] text-ink/40">Vote on 3 timetable slips + wait 24h from handle creation. One drip per ISO week.</p>
+                <p className="mt-1 font-mono text-[10px] text-ink/60">Vote on 3 timetable slips + wait 24h from handle creation. One drip per ISO week.</p>
               </>
             )}
-            <p className="mt-2 font-mono text-[10px] text-ink/40">Flow feeds itself — verify → earn → faucet drips. No new tables.</p>
+            <p className="mt-2 font-mono text-[10px] text-ink/60">Flow feeds itself — verify → earn → faucet drips. No new tables.</p>
           </div>
 
           {/* Invite rewards — slip + Fraunces */}
           <div className="brutal-card p-5">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Invite · 0.5 $PHY on their first win</p>
+            <p className="font-mono text-[11px] uppercase tracking-widest text-ink/65">Invite · 0.5 $PHY on their first win</p>
             <h2 className="font-display mt-1 text-xl font-black tracking-tight">Grow the node</h2>
             <p className="mt-1 text-sm leading-relaxed text-ink/60">
               Share your link. When someone you invited wins their first round, you get 0.5 $PHY — once per invitee, no cost to them.
@@ -379,31 +387,31 @@ export default function ProfilePage() {
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
-            <p className="mt-1 font-mono text-[10px] text-ink/40">Anyone opening the link joins with your id as invited_by.</p>
+            <p className="mt-1 font-mono text-[10px] text-ink/60">Anyone opening the link joins with your id as invited_by.</p>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="rounded-xl border border-sky/20 bg-paper px-3 py-3 text-center">
                 <p className="font-display text-xl font-black">{invites?.invite_count ?? "—"}</p>
-                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/50">Invited</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/65">Invited</p>
               </div>
               <div className="rounded-xl border border-sky/20 bg-paper px-3 py-3 text-center">
                 <p className="font-display text-xl font-black">{invites?.rewarded_count ?? "—"}</p>
-                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/50">Rewarded</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/65">Rewarded</p>
               </div>
               <div className="rounded-xl border border-forest/20 bg-forest/10 px-3 py-3 text-center">
                 <p className="font-display text-xl font-black text-forest">+{invites ? Number(invites.earned).toFixed(2) : "0.00"}</p>
-                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/50">$PHY earned</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/65">$PHY earned</p>
               </div>
             </div>
 
             {invites && invites.invites.length > 0 ? (
               <div className="mt-4 border-t border-sky/20 pt-3">
-                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/40">Recent invites</p>
+                <p className="font-mono text-[10px] uppercase tracking-wide text-ink/60">Recent invites</p>
                 <div className="mt-2 space-y-1">
                   {invites.invites.map((iv) => (
                     <div key={iv.id} className="flex items-center justify-between rounded-lg bg-paper px-3 py-2 font-mono text-xs">
                       <span className="font-bold text-ink">@{iv.nickname}</span>
-                      <span className="text-ink/50">{iv.created_at}</span>
+                      <span className="text-ink/65">{iv.created_at}</span>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${iv.rewarded ? "bg-forest text-white" : "bg-sky/20 text-ink/60"}`}>
                         {iv.rewarded ? "+0.5 paid" : "pending"}
                       </span>
@@ -412,7 +420,7 @@ export default function ProfilePage() {
                 </div>
               </div>
             ) : (
-              <p className="mt-3 font-mono text-[11px] text-ink/40">No invites yet — copy the link and bring the cohort.</p>
+              <p className="mt-3 font-mono text-[11px] text-ink/60">No invites yet — copy the link and bring the cohort.</p>
             )}
           </div>
 

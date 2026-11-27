@@ -136,7 +136,7 @@ export default function RoundsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-24 text-ink">
-      <p className="kicker text-coral">the ledger</p>
+      <p className="kicker text-brick">the ledger</p>
       <h1 className="mt-2 text-4xl sm:text-5xl">ROUND HISTORY.</h1>
       <p className="mt-1 text-sm text-ink/60">
         Every block locks timetable slips. Mining mints the timetable — chain, grid, and txs together. Tap any row to see <span className="font-mono text-[11px]">prev_hash → winning_ticket</span> + <span className="font-mono text-[11px]">tx_root</span>.
@@ -144,7 +144,7 @@ export default function RoundsPage() {
 
       {leaders.length > 0 && (
         <div className="brutal-card mt-4 p-4">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-ink/50">Leaderboard</p>
+          <p className="font-mono text-[11px] uppercase tracking-widest text-ink/65">Leaderboard</p>
           {leaders.map((l, i) => (
             <div key={l.nickname} className="mt-1 flex items-center justify-between font-mono text-xs">
               <span className="font-black">{i + 1}. @{l.nickname}</span>
@@ -184,7 +184,7 @@ export default function RoundsPage() {
                     </span>
                     <span className="hidden sm:inline">{r.winning_score !== null ? `score ${r.winning_score}` : "—"}</span>
                     <span className="font-bold">+{r.reward}</span>
-                    <span className="hidden text-ink/40 sm:inline" title={r.prev_hash || undefined}>{r.prev_hash ? shortHex(r.prev_hash, 6, 4) : ""}</span>
+                    <span className="hidden text-ink/60 sm:inline" title={r.prev_hash || undefined}>{r.prev_hash ? shortHex(r.prev_hash, 6, 4) : ""}</span>
                     <span className="text-ink/30">{isOpen ? "▴" : "▾"}</span>
                   </button>
 
@@ -200,7 +200,7 @@ export default function RoundsPage() {
                         <>
                           {/* chain linkage strip: one-glance prev_hash → winning_ticket */}
                           <div className="rounded-xl border border-ink/10 bg-white p-3">
-                            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/40">Chain linkage · one glance</p>
+                            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/60">Chain linkage · one glance</p>
                             <div className="mt-2 flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
                               <span className="rounded-full border border-sky/30 bg-sky/10 px-2 py-1 font-bold" title={d.block.prev_hash || undefined}>prev {shortHex(d.block.prev_hash, 8, 6)}</span>
                               <span className="font-black text-accent">→</span>
@@ -216,15 +216,15 @@ export default function RoundsPage() {
 
                           {/* txs list */}
                           <div className="mt-3">
-                            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/40">Txs in this block · up to 12</p>
+                            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/60">Txs in this block · up to 12</p>
                             {d.txs.length === 0 ? (
-                              <p className="mt-1 rounded-xl border border-dashed border-sky/30 bg-white px-3 py-3 text-center font-mono text-xs text-ink/50">Empty block — still chained (prev → ticket → tx_root), no slips this round.</p>
+                              <p className="mt-1 rounded-xl border border-dashed border-sky/30 bg-white px-3 py-3 text-center font-mono text-xs text-ink/65">Empty block — still chained (prev → ticket → tx_root), no slips this round.</p>
                             ) : (
                               <ul className="mt-1 divide-y divide-sky/15 overflow-hidden rounded-xl border border-sky/20 bg-white">
                                 {d.txs.map((t) => (
                                   <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2 font-mono text-xs">
                                     <span className="truncate"><span className="font-bold text-ink">{t.venue}</span> <span className="text-ink/60">· {t.title}</span></span>
-                                    <span className="shrink-0 text-ink/40">{String(t.event_date).slice(0, 10)} · {t.status}</span>
+                                    <span className="shrink-0 text-ink/60">{String(t.event_date).slice(0, 10)} · {t.status}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -233,19 +233,19 @@ export default function RoundsPage() {
 
                           {/* lattice grid preview */}
                           <div className="mt-3">
-                            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/40">Lattice grid preview · winner&apos;s timetable</p>
+                            <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/60">Lattice grid preview · winner&apos;s timetable</p>
                             {d.lattice_preview && d.lattice_preview.length > 0 ? (
                               <>
                                 <div className="mt-1 grid gap-1 rounded-xl border border-ink/10 bg-white p-2" style={{ gridTemplateColumns: `repeat(${Math.sqrt(d.lattice_preview.length) || 6}, minmax(0, 1fr))` }}>
                                   {d.lattice_preview.slice(0, Math.min(d.lattice_preview.length, 36)).map((c) => (
                                     <div key={`${c.row}-${c.col}`} className="rounded-lg border border-sky/20 bg-paper px-1 py-1.5 text-center">
-                                      <p className="font-mono text-[8px] leading-none text-ink/40">{c.period}</p>
+                                      <p className="font-mono text-[8px] leading-none text-ink/60">{c.period}</p>
                                       <p className="font-display text-[11px] font-bold leading-none">{c.hall}</p>
-                                      <p className="truncate font-mono text-[8px] leading-none text-ink/50">{c.level}</p>
+                                      <p className="truncate font-mono text-[8px] leading-none text-ink/65">{c.level}</p>
                                     </div>
                                   ))}
                                 </div>
-                                <p className="mt-1 font-mono text-[10px] text-ink/40">v{d.block.number} · {d.lattice_preview.length} cells · ticket {d.block.winning_ticket ? shortHex((d.block as any).winning_ticket, 10, 6) : "—"}</p>
+                                <p className="mt-1 font-mono text-[10px] text-ink/60">v{d.block.number} · {d.lattice_preview.length} cells · ticket {d.block.winning_ticket ? shortHex((d.block as any).winning_ticket, 10, 6) : "—"}</p>
                               </>
                             ) : d.grid_hex ? (
                               <div className="mt-1 rounded-xl border border-sky/20 bg-white p-3">
@@ -254,17 +254,16 @@ export default function RoundsPage() {
                                     <div key={i} className="grid h-7 place-items-center rounded bg-paper font-mono text-[10px] font-bold text-ink/70">{ch.toUpperCase()}</div>
                                   ))}
                                 </div>
-                                <p className="mt-2 font-mono text-[10px] text-ink/40">raw nibble grid · {d.lattice_order || 6}×{d.lattice_order || 6}</p>
+                                <p className="mt-2 font-mono text-[10px] text-ink/60">raw nibble grid · {d.lattice_order || 6}×{d.lattice_order || 6}</p>
                               </div>
                             ) : (
-                              <p className="mt-1 rounded-xl border border-dashed border-sky/30 bg-white px-3 py-3 text-center font-mono text-xs text-ink/50">
-                                No grid for this block — empty or pre-lattice. <a href="/app/schedule" className="font-bold text-accent underline">See current timetable →</a>
+                              <p className="mt-1 rounded-xl border border-dashed border-sky/30 bg-white px-3 py-3 text-center font-mono text-xs text-ink/65">
+                                This block closed empty — no timetable was recorded in it.{" "}
+                                <a href="/app/schedule" className="font-bold text-accent underline">
+                                  See the current timetable →
+                                </a>
                               </p>
                             )}
-                          </div>
-
-                          <div className="mt-3 flex justify-end">
-                            <a href={`/api/rounds?round=${r.number}`} className="font-mono text-[11px] font-bold text-accent hover:underline">raw JSON →</a>
                           </div>
                         </>
                       ) : null}
@@ -273,7 +272,7 @@ export default function RoundsPage() {
                 </div>
               );
             })}
-            {rounds.length === 0 && <p className="text-sm text-ink/50">No rounds yet.</p>}
+            {rounds.length === 0 && <p className="text-sm text-ink/65">No rounds yet.</p>}
           </div>
         </>
       )}

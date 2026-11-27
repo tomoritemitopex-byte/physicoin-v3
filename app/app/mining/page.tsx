@@ -215,7 +215,7 @@ export default function MiningPage() {
   const xp = xpFrom(stats);
   const level = Math.max(1, Math.floor(xp / 100) + 1);
   const canMine = Boolean(uid && session && round && !busy && submits < 25);
-  const barPct = round ? Math.min(100, Math.max(6, Math.round((1 - round.difficulty / 80) * 100))) : 0;
+  const barPct = round ? Math.min(100, Math.max(6, Math.round((1 - round.difficulty / barCap(round.lattice_order)) * 100))) : 0;
   // Juicy earning preview — variable by bar + XP level, no new DB (existing XP + round fields only).
   const xpBonus = Math.min(0.5, Math.floor(xp / 100) * 0.05);
   const streakBonus = stats.rounds_won >= 3 ? 0.15 : stats.rounds_won >= 1 ? 0.1 : 0;
@@ -227,16 +227,20 @@ export default function MiningPage() {
     <div className="min-h-screen bg-paper text-ink">
       <main className="mx-auto max-w-[1120px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
         {/* advanced view banner — primary is now invisible */}
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-700">Advanced view — mining is now invisible</p>
+        <div className="rounded-2xl border border-ink/10 bg-paper-2 px-4 py-3">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-ink/70">Mining happens by itself</p>
           <p className="mt-1 text-[13px] leading-relaxed text-ink/70">
-            A timetable edit <em>is</em> the mine — when you post a slip on the Board, we grind your ticket for that round in the background. This page is for enthusiasts. Primary flow: post on <a href="/app/board" className="font-bold text-accent underline">Board</a> → <span className="font-mono text-xs">“Posted — mining in background, locks in next block”</span>
+            When you post a venue change on the{" "}
+            <a href="/app/board" className="font-bold underline">
+              Board
+            </a>
+            , we grind your ticket in the background. This page is the manual dial — one tap, one ticket, lowest wins.
           </p>
         </div>
         {/* eyebrow + title — human language, no lattice/nonce */}
         <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-accent">One tap · one ticket · lowest wins — advanced</p>
+            <p className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-brick">One tap · one ticket · lowest wins</p>
             <h1 className="font-display mt-1 text-[34px] font-black leading-none tracking-tight sm:text-[40px]">
               Mine <span className="font-normal text-ink/35">· Round {loading ? "…" : round ? round.round : "—"}</span>
             </h1>
@@ -246,9 +250,9 @@ export default function MiningPage() {
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-sky/25 bg-white px-4 py-3 text-center shadow-sm">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Your XP</p>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Your XP</p>
               <p className="font-display text-2xl font-black tabular-nums">{xp}</p>
-              <p className="font-mono text-[10px] text-ink/45">→ feeds League</p>
+              <p className="font-mono text-[10px] text-ink/65">→ feeds League</p>
             </div>
             <div className="hidden rounded-2xl bg-ink px-4 py-3 text-center text-white sm:block">
               <p className="font-mono text-[10px] uppercase tracking-widest text-white/60">Streak</p>
@@ -261,45 +265,45 @@ export default function MiningPage() {
         {/* ONE-GLANCE DASHBOARD — all six fields above the fold, no scroll needed */}
         <section className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
           <div className="slip rounded-2xl p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Round</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Round</p>
             <p className="font-display mt-1 text-3xl font-black tabular-nums">{loading ? "…" : round ? `#${round.round}` : "—"}</p>
-            <p className="mt-1 font-mono text-[11px] text-ink/50">{round?.status === "open" ? "● Live" : loading ? "Syncing…" : "Closed"}</p>
+            <p className="mt-1 font-mono text-[11px] text-ink/65">{round?.status === "open" ? "● Live" : loading ? "Syncing…" : "Closed"}</p>
           </div>
           <div className="slip rounded-2xl p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Ends in</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Ends in</p>
             <p className={`font-display mt-1 text-3xl font-black tabular-nums ${secondsLeft <= 15 ? "text-brick" : "text-ink"}`}>
               {minutes}:{seconds}
             </p>
-            <p className="mt-1 font-mono text-[11px] text-ink/50">{secondsLeft <= 15 ? "Closing — tap now" : `${submits}/25 entries used`}</p>
+            <p className="mt-1 font-mono text-[11px] text-ink/65">{secondsLeft <= 15 ? "Closing — tap now" : `${submits}/25 entries used`}</p>
           </div>
           <div className="slip rounded-2xl p-4">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Bar to beat</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Bar to beat</p>
             <p className="font-display mt-1 text-2xl font-black tabular-nums">{round ? round.difficulty : "—"}</p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/10">
               <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${barPct}%` }} />
             </div>
-            <p className="mt-1 font-mono text-[10px] leading-none text-ink/50">Lower ticket wins — bar sets entry bar</p>
+            <p className="mt-1 font-mono text-[10px] leading-none text-ink/65">Lower ticket wins — bar sets entry bar</p>
           </div>
           <div className="rounded-2xl border border-sky/30 bg-white p-4 shadow-sm">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Your ticket</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Your ticket</p>
             <p className="mt-1 truncate font-mono text-[13px] font-bold tabular-nums" title={yourTicket || undefined}>
               {yourTicket ? `0x${shortHex(yourTicket, 18)}` : "— no entry yet"}
             </p>
-            <p className="mt-1 font-mono text-[11px] text-ink/50">{yourTicket ? "Lowest wins — tap to improve" : "Tap Mine to deal one"}</p>
+            <p className="mt-1 font-mono text-[11px] text-ink/65">{yourTicket ? "Lowest wins — tap to improve" : "Tap Mine to deal one"}</p>
           </div>
           <div className="rounded-2xl border border-sky/30 bg-white p-4 shadow-sm">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Leader ticket</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Leader ticket</p>
             <p className="mt-1 truncate font-mono text-[13px] font-bold tabular-nums" title={round?.leader?.ticket || undefined}>
               {round?.leader?.ticket ? `0x${shortHex(round.leader.ticket, 18)}` : "— be first"}
             </p>
-            <p className="mt-1 font-mono text-[11px] text-ink/50">{round?.leader ? "Current best — beat it" : "No leader yet"}</p>
+            <p className="mt-1 font-mono text-[11px] text-ink/65">{round?.leader ? "Current best — beat it" : "No leader yet"}</p>
           </div>
           <div className="rounded-2xl border border-sky/30 bg-white p-4 shadow-sm">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Last round code</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Last round code</p>
             <p className="mt-1 truncate font-mono text-[12px] font-bold tabular-nums" title={round?.prev_hash || undefined}>
               {round?.prev_hash ? shortHex(round.prev_hash, 22) : "GENESIS"}
             </p>
-            <p className="mt-1 font-mono text-[11px] leading-none text-ink/50">Chain of winners — verifiable</p>
+            <p className="mt-1 font-mono text-[11px] leading-none text-ink/65">Chain of winners — verifiable</p>
           </div>
         </section>
 
@@ -336,18 +340,32 @@ export default function MiningPage() {
               </p>
             </div>
             <div className="shrink-0 sm:w-[340px]">
-              <button
-                onClick={mine}
-                disabled={!canMine}
-                aria-busy={mineState === "working"}
-                className={`flex w-full items-center justify-center gap-3 rounded-full px-6 py-4 text-[15px] font-black transition ${canMine ? "bg-ink text-white hover:bg-accent hover:shadow-lg active:scale-[0.98]" : "cursor-not-allowed bg-ink/10 text-ink/40"}`}
-              >
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-sm">⛏</span>
-                {busy ? "Dealing…" : loading ? "Syncing…" : !uid ? "Create handle to mine" : !session ? "Unlock wallet to mine" : submits >= 25 ? "Cap reached (25/25)" : "Mine this round"}
-                <span aria-hidden>→</span>
-              </button>
-              <p className="mt-2 text-center font-mono text-[11px] text-ink/45">
-                {handle ? `@${handle}` : "No handle"} · {submits}/25 entries · 1 $PHY reward
+              {!uid ? (
+                <a href="/join" className="flex w-full items-center justify-center gap-3 rounded-full bg-ink px-6 py-4 text-[15px] font-black text-white transition hover:bg-accent hover:shadow-lg active:scale-[0.98]">
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-sm">⛏</span>
+                  Create a handle to mine
+                  <span aria-hidden>→</span>
+                </a>
+              ) : !session ? (
+                <a href="/app/profile" className="flex w-full items-center justify-center gap-3 rounded-full bg-ink px-6 py-4 text-[15px] font-black text-white transition hover:bg-accent hover:shadow-lg active:scale-[0.98]">
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-sm">🔑</span>
+                  Unlock your wallet
+                  <span aria-hidden>→</span>
+                </a>
+              ) : (
+                <button
+                  onClick={mine}
+                  disabled={!canMine}
+                  aria-busy={mineState === "working"}
+                  className={`flex w-full items-center justify-center gap-3 rounded-full px-6 py-4 text-[15px] font-black transition ${canMine ? "bg-ink text-white hover:bg-accent hover:shadow-lg active:scale-[0.98]" : "cursor-not-allowed bg-ink/10 text-ink/60"}`}
+                >
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-sm">⛏</span>
+                  {busy ? "Dealing…" : loading ? "Syncing…" : submits >= 25 ? "Cap reached (25/25)" : "Mine this round"}
+                  <span aria-hidden>→</span>
+                </button>
+              )}
+              <p className="mt-2 text-center font-mono text-[11px] text-ink/65">
+                {handle ? `@${handle}` : "No handle yet"} · {submits}/25 entries · 1 $PHY reward
               </p>
             </div>
           </div>
@@ -369,8 +387,8 @@ export default function MiningPage() {
             </div>
           )}
           {/* sound placeholder note + tiny league preview */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink/8 pt-3 font-mono text-[11px] text-ink/50">
-            <span>🔊 pop on success — sound placeholder (swap in /sounds/pop.mp3)</span>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink/8 pt-3 font-mono text-[11px] text-ink/65">
+            <span>Lower ticket wins · entries reset every round</span>
             <span className="tabular-nums">
               {stats.accepted_proofs} entries · {stats.rounds_won} wins · {Number(stats.total_rewards).toFixed(2)} $PHY earned
             </span>
@@ -388,21 +406,21 @@ export default function MiningPage() {
               {receipts.map((r, i) => (
                 <div key={`${r.created_at}-${i}`} className="flex items-center justify-between gap-3 py-2.5 font-mono text-xs">
                   <span className="font-bold text-accent">{r.round ? `R${r.round}` : "CLAIM"}</span>
-                  <span className="hidden text-ink/50 sm:inline">entry {r.nonce} · score {r.score}</span>
-                  <span className="text-ink/50">{new Date(r.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                  <span className="hidden text-ink/65 sm:inline">entry {r.nonce} · score {r.score}</span>
+                  <span className="text-ink/65">{new Date(r.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
                   <strong className="text-emerald-700">+{r.reward} $PHY</strong>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-3 rounded-xl border border-dashed border-ink/15 bg-paper px-4 py-6 text-center font-mono text-xs text-ink/50">
+            <p className="mt-3 rounded-xl border border-dashed border-ink/15 bg-paper px-4 py-6 text-center font-mono text-xs text-ink/65">
               No receipts yet — your first tap that clears the bar lands here.
             </p>
           )}
         </section>
 
-        <p className="mt-6 text-center font-mono text-[11px] text-ink/40">
-          Human copy only — no lattice / nonce jargon. Ticket math recomputes on the server every submit.
+        <p className="mt-6 text-center font-mono text-[11px] text-ink/65">
+          Every ticket is checked on the server — nothing is trusted from the browser.
         </p>
       </main>
 

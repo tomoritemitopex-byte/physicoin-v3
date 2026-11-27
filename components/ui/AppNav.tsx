@@ -49,6 +49,7 @@ const ICONS = {
 } as const;
 
 const HEADER_TABS: Tab[] = [
+  { href: "/app", label: "Live", icon: "board" },
   { href: "/app/roadmap", label: "Road", icon: "road" },
   { href: "/app/schedule", label: "Table", icon: "table" },
   { href: "/app/mining", label: "Mine", icon: "mine" },
@@ -58,7 +59,7 @@ const HEADER_TABS: Tab[] = [
 ];
 
 const BOTTOM_TABS: Tab[] = [
-  { href: "/app/roadmap", label: "Road", icon: "road" },
+  { href: "/app", label: "Live", icon: "board" },
   { href: "/app/schedule", label: "Table", icon: "table" },
   { href: "/app/mining", label: "Mine", icon: "mine" },
   { href: "/app/rounds", label: "Chain", icon: "chain" },

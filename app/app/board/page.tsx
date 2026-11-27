@@ -128,11 +128,11 @@ function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: bool
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-sky/25 bg-white px-3 py-2.5 shadow-sm sm:px-4">
       <div className="shrink-0">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/40">Chain pulse · last 5</p>
+        <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/60">Chain pulse · last 5</p>
         <div className="mt-0.5 flex items-center gap-1.5">
           <span className={`inline-block h-2 w-2 rounded-full ${isMoving && !loading ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,.6)]" : "bg-ink/20"} ${isMoving && !loading ? "animate-pulse" : ""}`} aria-hidden />
           <span className="font-mono text-xs font-bold tabular-nums text-ink">{loading ? "syncing…" : isMoving ? "moving" : "idle · genesis"}</span>
-          <span className="font-mono text-[11px] text-ink/40">tx/block</span>
+          <span className="font-mono text-[11px] text-ink/60">tx/block</span>
         </div>
       </div>
       <div className="hidden h-9 w-px shrink-0 bg-sky/20 sm:block" aria-hidden />
@@ -148,9 +148,9 @@ function ChainSparkline({ blocks, loading }: { blocks: BlockRow[]; loading: bool
         </svg>
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {loading ? (
-            <span className="font-mono text-[11px] text-ink/40">…</span>
+            <span className="font-mono text-[11px] text-ink/60">…</span>
           ) : ordered.length === 0 ? (
-            <span className="font-mono text-[11px] text-ink/40">no blocks yet — mine to start</span>
+            <span className="font-mono text-[11px] text-ink/60">no blocks yet — mine to start</span>
           ) : (
             ordered.map((b, i) => (
               <span key={b.number} className="flex items-center gap-1">
@@ -275,8 +275,8 @@ function GrowthPulse() {
     <div className={`mt-3 rounded-2xl border ${status.border} ${status.bg} px-3 py-3 shadow-sm sm:px-4`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Growth Pulse · 7d</span>
-          {degraded && <span className="rounded-full bg-ink/10 px-2 py-0.5 font-mono text-[10px] text-ink/50">cached</span>}
+          <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/65">Growth Pulse · 7d</span>
+          {degraded && <span className="rounded-full bg-ink/10 px-2 py-0.5 font-mono text-[10px] text-ink/65">cached</span>}
         </div>
         <span className={`inline-flex items-center gap-1.5 rounded-full border ${status.border} bg-white px-2.5 py-1 font-mono text-[11px] font-bold ${status.text}`}>
           <span className={`h-2 w-2 rounded-full ${status.dot} ${saturated || compounding ? "animate-pulse" : ""}`} aria-hidden />
@@ -285,21 +285,21 @@ function GrowthPulse() {
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2">
         <div className="rounded-xl bg-white px-2.5 py-2 text-center shadow-sm sm:px-3">
-          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/40">New wallets</p>
+          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/60">New wallets</p>
           <p className="font-mono text-[15px] font-black tabular-nums text-ink">{loading && newWallets === null ? "…" : String(newWallets ?? 0)}</p>
         </div>
         <div className="rounded-xl bg-white px-2.5 py-2 text-center shadow-sm sm:px-3">
-          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/40">Slips posted</p>
+          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/60">Slips posted</p>
           <p className="font-mono text-[15px] font-black tabular-nums text-ink">{loading && slips7d === null ? "…" : String(slips7d ?? 0)}</p>
         </div>
         <div className="rounded-xl bg-white px-2.5 py-2 text-center shadow-sm sm:px-3">
-          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/40">Win rate</p>
+          <p className="font-mono text-[9px] uppercase tracking-widest text-ink/60">Win rate</p>
           <p className="font-mono text-[15px] font-black tabular-nums text-ink">{loading && winRate === null ? "…" : `${winRate ?? 0}%`}</p>
         </div>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 font-mono text-[10px] leading-none">
-        <span className="text-ink/40">invite drives wallets · slips drive tx · wins drive chain</span>
-        <button onClick={load} className="font-bold text-ink/40 hover:text-ink">↻ refresh</button>
+        <span className="text-ink/60">invite drives wallets · slips drive tx · wins drive chain</span>
+        <button onClick={load} className="font-bold text-ink/60 hover:text-ink">↻ refresh</button>
       </div>
     </div>
   );
@@ -641,7 +641,9 @@ export default function BoardPage() {
     }
   }
 
-  const barPct = round ? Math.min(100, Math.max(8, Math.round((1 - round.difficulty / 80) * 100))) : 0;
+  const barPct = round
+    ? Math.min(100, Math.max(8, Math.round((1 - round.difficulty / barCapBoard(round.lattice_order)) * 100)))
+    : 0;
   const xp = boardXp(xpStats);
   const level = Math.max(1, Math.floor(xp / 100) + 1);
   const xpBonusBoard = Math.min(0.5, Math.floor(xp / 100) * 0.05);
@@ -654,10 +656,10 @@ export default function BoardPage() {
       {/* sky header ruled */}
       <div className="mx-auto max-w-[1120px] px-4 pt-6 sm:px-6">
         {/* eyebrow */}
-        <p className="kicker text-coral">timetable + mining · one board</p>
+        <p className="kicker text-brick">timetable + mining · one board</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-5xl leading-[0.9] sm:text-6xl">
-            BOARD<span className="text-coral">.</span>
+            BOARD<span className="text-brick">.</span>
           </h1>
           <p className="max-w-[560px] text-[13px] leading-relaxed text-ink/60">
             Post a notice → it sits in the mempool → miners lottery it in → a block locks it with <span className="font-mono text-[11px]">prev_hash</span> + <span className="font-mono text-[11px]">tx_root</span> → chain.
@@ -687,18 +689,18 @@ export default function BoardPage() {
           const label = hottest ? (BUILDING_LABEL[hottest] || hottest) : "";
           return (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-[3px] border-ink bg-white px-3 py-2 shadow-brutal-sm">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/50">Heat Hall</span>
+              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-ink/65">Heat Hall</span>
               {hottest ? (
                 <span className="flex items-center gap-2 font-mono text-[11px]">
                   <span className="inline-block h-2 w-2 rounded-full bg-brick animate-pulse" aria-hidden />
                   <span className="font-bold text-brick">{label} hottest · {max} pending</span>
-                  <span className="hidden sm:inline text-ink/40">open Roadmap → tap red hall for ×1.5</span>
+                  <span className="hidden sm:inline text-ink/60">open Roadmap → tap red hall for ×1.5</span>
                   <button onClick={() => {
                     try { localStorage.setItem(HEAT_BOOST_KEY, JSON.stringify({ buildingId: hottest, ts: Date.now() })); setBoostHall(hottest); setHeatToast(`Next ticket ×1.5 for ${label}`); setTimeout(()=>setHeatToast(""),2600);} catch {}
                   }} className="ml-1 border-2 border-ink bg-coral px-2.5 py-1 text-[11px] font-bold text-ink hover:bg-coral/90">Tap ×1.5</button>
                 </span>
               ) : (
-                <span className="font-mono text-[11px] text-ink/40">no pending heat — post a slip</span>
+                <span className="font-mono text-[11px] text-ink/60">no pending heat — post a slip</span>
               )}
               {boostHall && <span className="rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[10px] font-bold text-amber-800">Next ticket ×1.5 for {BUILDING_LABEL[boostHall] || boostHall}</span>}
             </div>
@@ -709,9 +711,9 @@ export default function BoardPage() {
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/60 bg-amber-50/80 px-3 py-2 shadow-sm">
           <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-800">Name votes</span>
           {aliasLoading ? (
-            <span className="font-mono text-[11px] text-ink/40">syncing…</span>
+            <span className="font-mono text-[11px] text-ink/60">syncing…</span>
           ) : aliases.length === 0 ? (
-            <span className="font-mono text-[11px] text-ink/40">no pending hall disputes — e.g. LT1 vs Lecture Theatre 1 will appear here</span>
+            <span className="font-mono text-[11px] text-ink/60">no pending hall disputes — e.g. LT1 vs Lecture Theatre 1 will appear here</span>
           ) : (
             <div className="flex flex-1 flex-wrap items-center gap-2">
               {aliases.slice(0, 3).map((a) => (
@@ -734,29 +736,31 @@ export default function BoardPage() {
         </div>
         {aliasMsg && <p className="mt-1 font-mono text-[11px] text-ink/60" role="status">{aliasMsg}</p>}
 
-        {/* FLOWCHART — 5 pills */}
-        <div className="mt-5 overflow-x-auto">
-          <div className="flex min-w-[640px] items-center gap-2 rounded-[20px] border border-sky/25 bg-white/80 px-3 py-3 shadow-sm backdrop-blur sm:min-w-0 sm:justify-between sm:px-4">
+        {/* FLOWCHART — 5 steps, wraps on a phone (no hidden horizontal scroll) */}
+        <div className="mt-5">
+          <div className="flex flex-wrap items-center gap-2 rounded-[20px] border border-sky/25 bg-white/80 px-3 py-3 shadow-sm sm:justify-between sm:px-4">
             {[
-              { n: "1", label: "Post", sub: "you pin it" },
-              { n: "2", label: "Mempool", sub: "pending" },
-              { n: "3", label: "Mine", sub: "lottery · lowest wins" },
-              { n: "4", label: "Block", sub: "prev_hash + tx_root" },
-              { n: "5", label: "Chain", sub: "verifiable" },
+              { n: "1", label: "Post", sub: "you pin it", href: "/app/board" },
+              { n: "2", label: "Mempool", sub: "pending", href: "/app/board" },
+              { n: "3", label: "Mine", sub: "lowest wins", href: "/app/mining" },
+              { n: "4", label: "Block", sub: "sealed", href: "/app/rounds" },
+              { n: "5", label: "Chain", sub: "checkable", href: "/app/rounds" },
             ].map((p, i) => (
               <div key={p.label} className="flex items-center gap-2">
-                <div className="flex items-center gap-2 rounded-full border border-ink/10 bg-white px-3 py-2 shadow-sm">
+                <a href={p.href} className="flex items-center gap-2 rounded-full border border-ink/10 bg-white px-3 py-2 shadow-sm hover:border-ink/40">
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-[11px] font-black text-white">{p.n}</span>
                   <div className="pr-1 text-left leading-none">
                     <p className="text-[13px] font-black tracking-tight">{p.label}</p>
-                    <p className="font-mono text-[10px] text-ink/50">{p.sub}</p>
+                    <p className="font-mono text-[10px] text-ink/65">{p.sub}</p>
                   </div>
-                </div>
+                </a>
                 {i < 4 && <span className="px-1 font-mono text-[14px] font-black text-accent/60">→</span>}
               </div>
             ))}
           </div>
-          <p className="mt-2 text-center font-mono text-[10px] tracking-wide text-ink/40">tap left to post · tap center to mine · right is what the chain remembers</p>
+          <p className="mt-2 text-center font-mono text-[10px] tracking-wide text-ink/65">
+            post → classmates say yes → the block remembers it
+          </p>
         </div>
 
         {/* CENTER — 3 columns, stack on mobile */}
@@ -769,7 +773,7 @@ export default function BoardPage() {
                 {slipsLoading ? "…" : `${slips.length} pending`}
               </span>
             </div>
-            <p className="mt-1 font-mono text-[11px] leading-relaxed text-ink/50">Mempool — newest venue changes, awaiting votes. Up to 12 seal into the next block.</p>
+            <p className="mt-1 font-mono text-[11px] leading-relaxed text-ink/65">Mempool — newest venue changes, awaiting votes. Up to 12 seal into the next block.</p>
 
             {/* Conversational posting — prompt engineering IS the interface (3-step, one tap, progress bar) */}
             <div className="mt-3">
@@ -807,22 +811,27 @@ export default function BoardPage() {
               ) : slips.length === 0 ? (
                 <div className="slip border-dashed p-6 text-center">
                   <p className="font-display text-[15px] font-bold">No pending slips</p>
-                  <p className="mt-1 font-mono text-xs text-ink/50">Be first — tap Post a slip above.</p>
+                  <p className="mt-1 font-mono text-xs text-ink/65">Be first — tap Post a slip above.</p>
                 </div>
               ) : (
                 // Bend spec (bend/Face.bend face_cells, parallel) is the specification,
                 // verified via `bend --check-only`; TS Array.map below is the runtime.
                 slips.map((s) => (
                   <div key={s.id} className="slip p-4 pt-5 transition-transform duration-200 hover:scale-[1.015] hover:shadow-lg">
-                    <p className="tnum font-mono text-[11px] text-ink/50">
+                    <p className="tnum font-mono text-[11px] text-ink/65">
                       {String(s.event_time).slice(0, 5)} · {String(s.event_date).slice(0, 10)} · {s.status === "verified" ? "✓ confirmed" : "pending"}
                     </p>
                     <p className="font-display mt-0.5 text-[15px] font-black leading-snug tracking-tight">{s.venue}</p>
                     <p className="text-[13px] font-semibold leading-snug text-ink/80">{s.title}</p>
-                    <p className="mt-1 font-mono text-[10px] text-ink/40">
-                      {s.scope_type}
-                      {s.scope_value ? ` · ${s.scope_value}` : ""}
-                      {s.severity ? ` · ${s.severity}` : ""}
+                    <p className="mt-1 font-mono text-[10px] text-ink/60">
+                      {s.scope_type === "general"
+                        ? "whole cohort"
+                        : s.scope_type === "programme"
+                          ? `${s.scope_value || "your programme"}`
+                          : s.scope_type === "level"
+                            ? `${s.scope_value || "your level"}`
+                            : s.scope_type}
+                      {s.severity === "move" ? " · moved" : s.severity === "shift" ? " · shifted" : s.severity === "cancel" ? " · cancelled" : ""}
                     </p>
                   </div>
                 ))
@@ -864,16 +873,16 @@ export default function BoardPage() {
                 {/* stats row */}
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl bg-white px-3 py-3 text-ink">
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Round</p>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Round</p>
                     <p className="font-display mt-0.5 text-xl font-black tabular-nums">#{round.round}</p>
                   </div>
                   <div className="rounded-2xl bg-white px-3 py-3 text-ink">
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Ends in</p>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Ends in</p>
                     <p className={`font-display mt-0.5 text-xl font-black tabular-nums ${secondsLeft <= 15 ? "text-brick" : "text-ink"}`}>{fmtTimeLeft(secondsLeft)}</p>
                   </div>
                   <div className="rounded-2xl bg-white px-3 py-3 text-ink">
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/45">Reward</p>
-                    <p className="font-display mt-0.5 text-xl font-black tabular-nums">{round.reward} <span className="text-[11px] font-bold text-ink/40">$PHY</span></p>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-ink/65">Reward</p>
+                    <p className="font-display mt-0.5 text-xl font-black tabular-nums">{round.reward} <span className="text-[11px] font-bold text-ink/60">$PHY</span></p>
                   </div>
                 </div>
 
@@ -912,7 +921,7 @@ export default function BoardPage() {
             {/* juicy earning preview — variable by bar + XP level (additive, 25cap + session respected) */}
             <div className="mt-3 rounded-2xl border border-amber-300/30 bg-amber-50 p-3 text-ink">
               <p className="font-mono text-[10px] font-bold uppercase tracking-widest text-amber-700">If you win this round: +1 PHY + streak × + invite bonus</p>
-              <p className="font-display mt-1 text-[13px] font-black leading-tight">→ {totalPreviewBoard} PHY <span className="font-mono text-[11px] font-bold text-ink/50">variable · bar {round?.difficulty ?? "—"} + XP Lv.{level}</span></p>
+              <p className="font-display mt-1 text-[13px] font-black leading-tight">→ {totalPreviewBoard} PHY <span className="font-mono text-[11px] font-bold text-ink/65">variable · bar {round?.difficulty ?? "—"} + XP Lv.{level}</span></p>
               <div className="mt-1.5 flex flex-wrap gap-1 font-mono text-[10px]">
                 <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+1.00 base</span>
                 <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+{xpBonusBoard.toFixed(2)} XP</span>
@@ -920,7 +929,7 @@ export default function BoardPage() {
                 <span className="rounded-full border border-ink/10 bg-white px-2 py-0.5">+{barBonusBoard.toFixed(2)} bar</span>
                 <span className="rounded-full border border-forest/20 bg-forest/10 px-2 py-0.5 font-bold text-forest">+0.50 / invite</span>
               </div>
-              <p className="mt-1 font-mono text-[10px] leading-relaxed text-ink/50">25 entries max/round · session-gated — your next tap is previewed above.</p>
+              <p className="mt-1 font-mono text-[10px] leading-relaxed text-ink/65">25 entries max/round · session-gated — your next tap is previewed above.</p>
             </div>
 
             {/* mine */}
@@ -956,7 +965,7 @@ export default function BoardPage() {
               <h2 className="font-display text-[17px] font-black tracking-tight">Chain</h2>
               <span className="rounded-full bg-ink px-2.5 py-1 font-mono text-[10px] font-bold text-white">last 3 blocks</span>
             </div>
-            <p className="mt-1 font-mono text-[11px] leading-relaxed text-ink/50">Each header holds <span className="font-bold text-ink/70">prev_hash</span> + <span className="font-bold text-ink/70">tx_root</span>. Empty still chained.</p>
+            <p className="mt-1 font-mono text-[11px] leading-relaxed text-ink/65">Each header holds <span className="font-bold text-ink/70">prev_hash</span> + <span className="font-bold text-ink/70">tx_root</span>. Empty still chained.</p>
 
             {chainLoading ? (
               <div className="mt-4 space-y-3">
@@ -972,14 +981,14 @@ export default function BoardPage() {
             ) : blocks.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-sky/30 bg-paper p-6 text-center">
                 <p className="font-display text-[15px] font-bold">No blocks yet</p>
-                <p className="mt-1 font-mono text-xs text-ink/50">Mine the first round — it mints the genesis.</p>
+                <p className="mt-1 font-mono text-xs text-ink/65">Mine the first round — it mints the genesis.</p>
               </div>
             ) : (
               <div className="mt-4 space-y-3">
                 {blocks.slice(0, 3).map((b) => (
                   <a
                     key={b.number}
-                    href={`/api/rounds?round=${b.number}`}
+                    href="/app/rounds"
                     className="block rounded-2xl border border-sky/20 bg-paper p-3 hover:border-accent/30 hover:bg-white"
                   >
                     <div className="flex items-center justify-between">
@@ -990,16 +999,16 @@ export default function BoardPage() {
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px]">
                       <span className="truncate">
-                        <span className="text-ink/40">txs </span>
+                        <span className="text-ink/60">txs </span>
                         <span className="font-bold tabular-nums">{b.tx_count != null ? String(b.tx_count) : "—"}</span>
-                        <span className="ml-1 text-ink/40">· ticket</span>
+                        <span className="ml-1 text-ink/60">· ticket</span>
                       </span>
                       <span className="truncate text-right tabular-nums font-bold" title={(b.winning_ticket as string) || undefined}>
                         {(b.winning_ticket as string) ? shortHex(b.winning_ticket as string, 6, 4) : b.winning_score !== null ? `score ${b.winning_score}` : "—"}
                       </span>
                     </div>
                     {b.prev_hash && (
-                      <p className="mt-1 truncate font-mono text-[10px] text-ink/40" title={b.prev_hash}>
+                      <p className="mt-1 truncate font-mono text-[10px] text-ink/60" title={b.prev_hash}>
                         prev {shortHex(b.prev_hash, 6, 4)}
                       </p>
                     )}
@@ -1010,7 +1019,7 @@ export default function BoardPage() {
 
             {/* schedule version */}
             <div className="mt-3 rounded-2xl border border-ink/8 bg-ink/[0.02] px-3 py-3">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-ink/40">Timetable version</p>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-ink/60">Timetable version</p>
               {schedule?.version == null ? (
                 <p className="mt-1 font-mono text-xs text-ink/60">No version yet — first winner mints v1.</p>
               ) : (
@@ -1022,13 +1031,13 @@ export default function BoardPage() {
                     <div className="mt-2 grid grid-cols-3 gap-1">
                       {schedule.cells.slice(0, 6).map((c) => (
                         <div key={`${c.row}-${c.col}`} className="rounded-lg border border-sky/20 bg-white px-2 py-1.5 text-center">
-                          <p className="font-mono text-[9px] text-ink/40">{c.period}</p>
+                          <p className="font-mono text-[9px] text-ink/60">{c.period}</p>
                           <p className="font-display text-[11px] font-bold leading-none">{c.hall}</p>
                         </div>
                       ))}
                     </div>
                   )}
-                  <p className="mt-1 truncate font-mono text-[10px] text-ink/40" title={schedule.ticket}>
+                  <p className="mt-1 truncate font-mono text-[10px] text-ink/60" title={schedule.ticket}>
                     ticket {schedule.ticket ? shortHex(schedule.ticket, 10, 6) : "—"}
                   </p>
                 </>
@@ -1048,7 +1057,7 @@ export default function BoardPage() {
             <h2 className="font-display text-[17px] font-black tracking-tight">Leaderboard</h2>
             <a href="/app/rounds" className="font-mono text-[11px] font-bold text-accent hover:underline">Full board →</a>
           </div>
-          <p className="mt-1 font-mono text-[11px] text-ink/50">Top miners — test wallets don&apos;t rank. 1 $PHY per round, 0.5 on invite&apos;s first win.</p>
+          <p className="mt-1 font-mono text-[11px] text-ink/65">Top miners — test wallets don&apos;t rank. 1 $PHY per round, 0.5 on invite&apos;s first win.</p>
           {leadersLoading ? (
             <div className="mt-4 grid gap-2 sm:grid-cols-3">
               {[0, 1, 2].map((k) => (
@@ -1056,7 +1065,7 @@ export default function BoardPage() {
               ))}
             </div>
           ) : leaders.length === 0 ? (
-            <p className="mt-4 rounded-xl border border-dashed border-ink/15 bg-paper px-4 py-6 text-center font-mono text-xs text-ink/50">No winners yet — your tap could be first.</p>
+            <p className="mt-4 rounded-xl border border-dashed border-ink/15 bg-paper px-4 py-6 text-center font-mono text-xs text-ink/65">No winners yet — your tap could be first.</p>
           ) : (
             <div className="mt-4 divide-y divide-ink/8 overflow-hidden rounded-2xl border border-ink/10">
               {leaders.map((l, i) => (
@@ -1067,7 +1076,7 @@ export default function BoardPage() {
                     </span>
                     <span className="font-mono text-sm font-black">@{l.nickname}</span>
                   </div>
-                  <span className="hidden font-mono text-xs text-ink/50 sm:inline">best {l.best_score}</span>
+                  <span className="hidden font-mono text-xs text-ink/65 sm:inline">best {l.best_score}</span>
                   <span className="font-mono text-xs">
                     <span className="font-black">{l.wins} wins</span>
                     <span className="ml-2 text-emerald-700">+{Number(l.earned).toFixed(2)} $PHY</span>

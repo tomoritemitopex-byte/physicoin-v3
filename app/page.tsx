@@ -80,18 +80,19 @@ export default async function LandingPage() {
               P
             </span>
             <span className="font-display text-lg tracking-tight">PHYSICOIN</span>
-            <span className="hidden border-l-2 border-ink/30 pl-3 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-ink/50 sm:inline">
+            <span className="hidden border-l-2 border-ink/30 pl-3 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-ink/65 sm:inline">
               campus signal layer
             </span>
           </Link>
           <nav className="hidden items-center gap-5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] md:flex">
-            <Link href="/app/roadmap" className="hover:text-coral">Road</Link>
-            <Link href="/app/schedule" className="hover:text-coral">Table</Link>
-            <Link href="/app/mining" className="hover:text-coral">Mine</Link>
-            <Link href="/app/rounds" className="hover:text-coral">Chain</Link>
+            <Link href="/app" className="hover:text-brick">Live</Link>
+            <Link href="/app/schedule" className="hover:text-brick">Table</Link>
+            <Link href="/app/mining" className="hover:text-brick">Mine</Link>
+            <Link href="/app/rounds" className="hover:text-brick">Chain</Link>
+            <Link href="/app/roadmap" className="hover:text-brick">Road</Link>
           </nav>
-          <Link href="/app/board" className="brutal-btn brutal-btn--ink text-[11px]">
-            Open the board →
+          <Link href="/app" className="brutal-btn brutal-btn--ink text-[11px]">
+            See what moved →
           </Link>
         </div>
       </header>
@@ -139,13 +140,13 @@ export default async function LandingPage() {
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Link href="/app/roadmap" className="brutal-btn">
-                Enter the live road →
+              <Link href="/app" className="brutal-btn">
+                See what moved →
               </Link>
               <Link href="/join" className="brutal-btn brutal-btn--white">
                 Create a handle
               </Link>
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink/50">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink/65">
                 no signup wall · advisory by design
               </span>
             </div>
@@ -213,7 +214,7 @@ export default async function LandingPage() {
                 Mine this round →
               </Link>
             </div>
-            <p className="mt-3 text-center font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink/45">
+            <p className="mt-3 text-center font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-ink/65">
               confidence is a live property, not a badge
             </p>
           </div>
@@ -223,7 +224,7 @@ export default async function LandingPage() {
         <section className="border-t-[3px] border-ink py-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="kicker text-coral">the protocol</p>
+              <p className="kicker text-brick">the protocol</p>
               <h2 className="mt-2 text-3xl sm:text-4xl">FROM RUMOUR TO SIGNAL.</h2>
             </div>
             <p className="max-w-sm text-sm leading-6 text-ink/60">
@@ -233,7 +234,7 @@ export default async function LandingPage() {
           <div className="mt-7 grid gap-4 md:grid-cols-3">
             {steps.map((s) => (
               <article key={s.n} className={`brutal-card ${s.bg} p-5`}>
-                <span className="font-mono text-xs font-bold text-ink/50">/{s.n}</span>
+                <span className="font-mono text-xs font-bold text-ink/65">/{s.n}</span>
                 <h3 className="mt-8 text-xl">{s.t}</h3>
                 <p className="mt-2 text-sm leading-6 text-ink/70">{s.d}</p>
               </article>
@@ -245,14 +246,14 @@ export default async function LandingPage() {
         <section className="border-t-[3px] border-ink py-10">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="kicker text-coral">under the hood</p>
+              <p className="kicker text-brick">under the hood</p>
               <h2 className="mt-2 text-3xl sm:text-4xl">FOUR THINGS THAT ACTUALLY HOLD.</h2>
             </div>
           </div>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {features.map(([t, d], i) => (
               <article key={t} className={`brutal-card p-4 ${i === 1 ? "brutal-card--lime" : ""}`}>
-                <p className="kicker text-ink/50">{String(i + 1).padStart(2, "0")}</p>
+                <p className="kicker text-ink/65">{String(i + 1).padStart(2, "0")}</p>
                 <h3 className="mt-3 text-lg">{t}</h3>
                 <p className="mt-2 text-[13px] leading-6 text-ink/70">{d}</p>
               </article>
@@ -265,7 +266,7 @@ export default async function LandingPage() {
           <div className="brutal-card p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="kicker text-coral">top miners</p>
+                <p className="kicker text-brick">top miners</p>
                 <h2 className="mt-1 text-2xl">THE BOARD</h2>
               </div>
               <Link href="/app/rounds" className="font-mono text-[11px] font-bold uppercase tracking-[0.1em] underline">
@@ -274,7 +275,7 @@ export default async function LandingPage() {
             </div>
             <div className="mt-4 divide-y-2 divide-ink/15 border-y-2 border-ink/20">
               {leaders.length === 0 ? (
-                <p className="py-6 text-center font-mono text-xs text-ink/50">
+                <p className="py-6 text-center font-mono text-xs text-ink/65">
                   No winners yet. Your tap could be the first block.
                 </p>
               ) : (
