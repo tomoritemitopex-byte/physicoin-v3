@@ -217,11 +217,11 @@ function JoinInner() {
               +0.5 $PHY queued for @{inviter} on your first win.
             </p>
           )}
-          <a href="/app" className="brutal-btn brutal-btn--coral w-full">
-            See what moved →
+          <a href="/app/mining" className="brutal-btn brutal-btn--coral w-full">
+            Seal your first block →
           </a>
-          <a href="/app/roadmap" className="brutal-btn brutal-btn--white w-full">
-            Open the Road
+          <a href="/app" className="brutal-btn brutal-btn--white w-full">
+            See what moved
           </a>
         </div>
       )}

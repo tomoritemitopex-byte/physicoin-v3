@@ -196,7 +196,9 @@ export default function MiningPage() {
       }
       setMineState("success");
       setMsgKind("success");
-      setMessage(`Locked in for round ${j.round ?? round?.round ?? "—"} — ticket saved to your wallet.`);
+      setMessage(
+        `Locked in for round ${j.round ?? round?.round ?? "—"} — ticket saved to your wallet. If it is the lowest when the round closes, your handle seals the block.`
+      );
       setBounce(true);
       playJuice();
       setTimeout(() => setBounce(false), 650);
@@ -375,6 +377,11 @@ export default function MiningPage() {
             aria-live="polite"
           >
             {message || (round ? "Ready — one tap enters you. Lowest ticket at close takes the coin." : "Syncing the round…")}
+            {mineState === "success" && (
+              <a href="/live" className="mt-2 block font-bold underline">
+                watch it land on the chain →
+              </a>
+            )}
           </div>
           {loadError && (
             <div className="mt-3 flex items-center justify-between rounded-xl border border-brick/20 bg-brick/5 px-3 py-2 font-mono text-xs text-brick">
