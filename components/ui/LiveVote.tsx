@@ -34,6 +34,7 @@ export default function LiveVote({
   const router = useRouter();
   const [busy, setBusy] = useState<"YES" | "NO" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [sealed, setSealed] = useState(false);
 
   const required = Math.max(1, Number(tally.required) || 8);
   const yes = Number(tally.yes) || 0;
@@ -64,8 +65,15 @@ export default function LiveVote({
       });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.ok !== false) {
-        setMsg(v === "YES" ? "Counted — one more classmate." : "Counted.");
-        router.refresh();
+        // The eighth yes is the whole product: the change goes green and a
+        // block seals. Give that moment the screen instead of a toast.
+        if (j.promoted) {
+          setSealed(true);
+          setTimeout(() => router.refresh(), 3500);
+        } else {
+          setMsg(v === "YES" ? "Counted — one more classmate." : "Counted.");
+          router.refresh();
+        }
       } else {
         setMsg(explain(j, r.status));
       }
@@ -74,6 +82,27 @@ export default function LiveVote({
     } finally {
       setBusy(null);
     }
+  }
+
+  if (sealed) {
+    return (
+      <div className="brutal-card brutal-card--lime seal-pop mt-5 p-6 text-center">
+        <div className="mx-auto grid h-20 w-20 place-items-center border-[3px] border-ink bg-white font-display text-[46px] leading-none shadow-brutal-sm">
+          ✓
+        </div>
+        <p className="mt-5 font-display text-[42px] leading-none">SEALED.</p>
+        <p className="mx-auto mt-3 max-w-[32ch] text-sm leading-6 text-ink/70">
+          {required} classmates agreed on <span className="font-bold">{event.venue}</span>. That change now rides into the
+          next block — and the block can&apos;t be quietly edited afterwards.
+        </p>
+        <a href="/live" className="brutal-btn brutal-btn--ink mt-5">
+          watch it land on the chain →
+        </a>
+        <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.12em] text-ink/65">
+          {roundNumber != null ? `block #${roundNumber} is open` : "back to the feed…"}
+        </p>
+      </div>
+    );
   }
 
   return (
