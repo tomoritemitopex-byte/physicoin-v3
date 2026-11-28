@@ -532,14 +532,57 @@ export async function miningDashboard(user_id: string, token?: string) {
   };
 }
 
-export async function recentRounds(limit = 20) {  const sql = getDb();
+export async function recentRounds(limit = 20) {
+  const sql = getDb();
   const rows = await sql<
-    { number: number; status: string; winning_score: number | null; reward: string; winner: string | null }[]
+    {
+      number: number;
+      status: string;
+      winning_score: number | null;
+      reward: string;
+      winner: string | null;
+      winning_ticket: string | null;
+      prev_hash: string | null;
+      tx_count: number | null;
+      ends_at: string | null;
+    }[]
   >`
-    SELECT r.number, r.status, r.winning_score, r.reward::text, u.nickname AS winner
+    SELECT r.number, r.status, r.winning_score, r.reward::text, u.nickname AS winner,
+      r.winning_ticket, r.prev_hash, r.tx_count, r.ends_at::text
     FROM physi_rounds r LEFT JOIN physi_users u ON u.id = r.winner_user_id
     ORDER BY r.number DESC LIMIT ${Math.min(limit, 50)}`;
   return rows;
+}
+
+/** Blocks that carry a real winning ticket — the student record, not the clock. */
+export async function recentWins(limit = 12) {
+  const sql = getDb();
+  return await sql<
+    {
+      number: number;
+      winning_ticket: string;
+      prev_hash: string | null;
+      winning_score: number | null;
+      reward: string;
+      winner: string | null;
+      ends_at: string | null;
+    }[]
+  >`
+    SELECT r.number, r.winning_ticket, r.prev_hash, r.winning_score, r.reward::text,
+      u.nickname AS winner, r.ends_at::text
+    FROM physi_rounds r LEFT JOIN physi_users u ON u.id = r.winner_user_id
+    WHERE r.winning_ticket IS NOT NULL
+    ORDER BY r.number DESC LIMIT ${Math.min(limit, 50)}`;
+}
+
+/** Honest totals for the public chain page. */
+export async function chainTotals() {
+  const sql = getDb();
+  const [r] = await sql<{ sealed: number; with_ticket: number }[]>`
+    SELECT count(*)::int AS sealed,
+      count(*) FILTER (WHERE winning_ticket IS NOT NULL)::int AS with_ticket
+    FROM physi_rounds`;
+  return { sealed: Number(r?.sealed ?? 0), with_ticket: Number(r?.with_ticket ?? 0) };
 }
 
 export async function leaderboard(limit = 20, includeTest = false) {

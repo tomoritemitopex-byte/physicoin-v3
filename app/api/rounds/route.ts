@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recentRounds, leaderboard, repairRounds, verifyChain } from "@/lib/domains/rounds";
+import { recentRounds, recentWins, leaderboard, repairRounds, verifyChain } from "@/lib/domains/rounds";
 import { toErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +50,10 @@ export async function GET(req: Request) {
     if (u.searchParams.get("view") === "leaders") {
       const includeTest = u.searchParams.get("lab") === "1";
       return NextResponse.json({ ok: true, leaders: await leaderboard(limit, includeTest) });
+    }
+    // The student record: blocks that carry a real winning ticket.
+    if (u.searchParams.get("view") === "wins") {
+      return NextResponse.json({ ok: true, wins: await recentWins(limit) });
     }
     // Public chain check: anyone can confirm the blocks link up.
     if (u.searchParams.get("view") === "chain") {

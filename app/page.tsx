@@ -143,12 +143,12 @@ export default async function LandingPage() {
               <Link href="/app" className="brutal-btn">
                 See what moved →
               </Link>
+              <Link href="/live" className="brutal-btn brutal-btn--ink">
+                Watch the chain live
+              </Link>
               <Link href="/join" className="brutal-btn brutal-btn--white">
                 Create a handle
               </Link>
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink/65">
-                no signup wall · advisory by design
-              </span>
             </div>
 
             <div className="mt-8 grid grid-cols-2 gap-2 sm:grid-cols-4">
